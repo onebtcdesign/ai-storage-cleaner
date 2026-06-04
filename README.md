@@ -1,4 +1,4 @@
-# jesnskills
+# ai-storage-cleaner
 
 Jesn 的 Codex skills 合集。
 
