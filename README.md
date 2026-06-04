@@ -1,6 +1,6 @@
 # ai-storage-cleaner
 
-Jesn 的 Codex skills 合集。
+一个给 Codex / AI Agent 使用的只读存储分析 skill，用来快速看清 macOS / Windows 电脑和外接盘里到底是什么占空间。
 
 ## ai-storage-cleaner
 
@@ -14,13 +14,31 @@ Jesn 的 Codex skills 合集。
 
 ## 一键安装
 
+### 方式一：让 AI 来安装（推荐）
+
+把这个仓库地址发给 Codex 或你正在使用的 AI 编程助手：
+
+```text
+https://github.com/onebtcdesign/ai-storage-cleaner
+```
+
+然后对它说：
+
+```text
+请帮我安装这个 Codex skill 到 ~/.codex/skills/ai-storage-cleaner，并确认安装后可以被调用。
+```
+
+AI 会帮你 clone 仓库、复制 `ai-storage-cleaner/` 目录到本机 skill 目录，并检查安装结果。安装完成后重启 Codex。
+
+### 方式二：手动安装
+
 在这个仓库根目录运行：
 
 ```bash
 mkdir -p ~/.codex/skills && rm -rf ~/.codex/skills/ai-storage-cleaner && cp -R ai-storage-cleaner ~/.codex/skills/ai-storage-cleaner
 ```
 
-重启 Codex 后，就可以直接对 Codex 说：
+重启 Codex 后，直接说：
 
 ```text
 请调用 ai-storage-cleaner 帮我分析电脑存储
