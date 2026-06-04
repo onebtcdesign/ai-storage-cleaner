@@ -267,6 +267,60 @@ def denied(scan):
     return out[:30]
 
 
+# 扩展名 -> 人类可读的内容类型，用于给大文件/重复文件画像
+EXT_KIND = {
+    "mp4": "视频", "mov": "视频", "mkv": "视频", "avi": "视频", "flv": "视频", "webm": "视频",
+    "iso": "镜像", "dmg": "镜像/安装包", "pkg": "安装包", "exe": "安装包", "msi": "安装包",
+    "zip": "压缩包", "rar": "压缩包", "7z": "压缩包", "tar": "压缩包", "gz": "压缩包",
+    "psd": "设计稿", "ai": "设计稿", "sketch": "设计稿", "fig": "设计稿",
+    "vmdk": "虚拟机镜像", "vdi": "虚拟机镜像", "qcow2": "虚拟机镜像", "sparsebundle": "虚拟机/磁盘镜像",
+    "wav": "音频", "aiff": "音频", "flac": "音频",
+    "raw": "原片", "arw": "原片", "cr2": "原片", "nef": "原片", "dng": "原片",
+    "pdf": "文档", "pptx": "文档", "key": "文档",
+}
+
+
+def ext_kind(ext):
+    return EXT_KIND.get((ext or "").lower(), "大文件")
+
+
+def build_big_files(scan, limit=30):
+    """透传 scan 的大文件清单，补一个内容类型，过滤掉太小的。"""
+    out = []
+    for f in scan.get("big_files") or []:
+        gb = gb_from_item(f)
+        if gb < 0.2:  # 200MB 以下不单列
+            continue
+        out.append({
+            "name": f.get("name") or clean_name(f.get("path", "")),
+            "path": f.get("path", ""),
+            "size": size_label(gb),
+            "kind": ext_kind(f.get("ext")),
+            "ext": f.get("ext", ""),
+        })
+    return out[:limit]
+
+
+def build_duplicates(scan, limit=20):
+    """透传重复文件组，标注每组浪费空间和内容类型。"""
+    out = []
+    for g in scan.get("duplicates") or []:
+        wasted_gb = float(g.get("wasted_kb", 0)) / 1024 / 1024
+        if wasted_gb < 0.2:
+            continue
+        paths = g.get("paths") or []
+        ext = os.path.splitext(paths[0])[1].lstrip(".").lower() if paths else ""
+        out.append({
+            "name": clean_name(paths[0]) if paths else "重复文件",
+            "size": size_label(float(g.get("size_kb", 0)) / 1024 / 1024),
+            "count": g.get("count", len(paths)),
+            "wasted": size_label(wasted_gb),
+            "kind": ext_kind(ext),
+            "paths": paths,
+        })
+    return out[:limit]
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -279,6 +333,8 @@ def main():
     green_paths = [p for item in green for p in item.get("trash_paths", [])]
     yellow_items = build_yellow(scan, green_paths)
     red = build_red(scan)
+    big_files = build_big_files(scan)
+    duplicates = build_duplicates(scan)
     g = sum(parse_gb(x.get("size_estimate")) for x in green)
     y = sum(parse_gb(x.get("size")) for x in yellow_items)
     r = sum(parse_gb(x.get("size")) for x in red)
@@ -296,6 +352,8 @@ def main():
         "green": green,
         "yellow": yellow_items,
         "red": red,
+        "big_files": big_files,
+        "duplicates": duplicates,
         "denied": denied(scan),
         "summary": {
             "overview": "优先处理绿灯缓存，预计可释放 %s。" % size_label(g),

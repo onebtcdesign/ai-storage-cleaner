@@ -34,10 +34,11 @@ python3 scripts/scan.py > /tmp/storage_scan.json
 ```
 
 `scan.py` 自动识别系统（`sys.platform`）：
-- **macOS**：扫 home、library、caches、containers、group_containers、app_support、applications、downloads、dev_caches，并枚举 `/Volumes` 下可见外接盘；每个外接盘会生成 `external_volumes` 摘要和 `volume_<盘名>` 子目录体量列表，用 `du` 算大小。
+- **macOS**：扫 home、library、caches、containers、group_containers、app_support、applications、downloads、dev_caches，并枚举 `/Volumes` 下可见外接盘；每个外接盘会生成 `external_volumes` 摘要和 `volume_<盘名>` 子目录体量列表。子目录体量用单次 `du -k -d 1` 批量计算（比逐目录 `du -sk` 快很多）。
 - **Windows**：扫 user_profile、appdata_local、appdata_roaming、temp、downloads、program_files(_x86)、dev_caches，并枚举所有盘符；非系统盘会生成 `external_volumes` 摘要和 `volume_<盘符>` 子目录体量列表，用 `os.scandir` 算大小。
+- **大文件 + 重复文件（两个系统都有）**：在 home 和各外接盘根上枚举 ≥50MB 的单个大文件（macOS 用 `find -x`，Windows 用 `os.walk`），输出 `big_files`（最大单文件 Top 榜，藏在普通目录里的视频/镜像/虚拟机盘等）。再对大文件按「相同大小 → 头尾分块 sha1」找重复，输出 `duplicates`（重复副本组 + 可省空间）。这两类只读、只定位，不参与自动删除。
 
-输出 JSON：`system`（系统/磁盘信息，含 `computer_name`、`disk_name` 主盘名 + `disks` 全部盘/外接盘）+ `groups`（各组子目录大小，已降序、过滤 50MB 以下）。扫描较慢，耐心等。读不到的目录标 `denied`，需在报告里列出并提示遗漏体量。
+输出 JSON：`system`（系统/磁盘信息，含 `computer_name`、`disk_name` 主盘名 + `disks` 全部盘/外接盘）+ `groups`（各组子目录大小，已降序、过滤 50MB 以下）+ `big_files`（最大单文件）+ `duplicates`（重复文件组）。扫描较慢（大文件枚举会遍历全盘），耐心等。读不到的目录标 `denied`，需在报告里列出并提示遗漏体量。
 
 ### Step 2 分析与分级
 
@@ -51,6 +52,7 @@ python3 scripts/analyze.py /tmp/storage_scan.json /tmp/storage_analysis.json
 - 用 `system.computer_name` 生成 `report.title`，格式为「某个电脑的存储分析报告」。
 - 汇总本机系统盘和外接盘的大目录，识别缓存、安装包、开发缓存、外接盘大目录和大应用。
 - 给可移废纸篓/回收站的项写入 `trash_paths`，供网页按钮白名单使用。
+- 透传 `big_files`（最大单文件，按扩展名标内容类型：视频/镜像/虚拟机镜像/压缩包等）和 `duplicates`（重复文件组 + 每组可省空间）。
 - 生成 `top5`、`summary.tier_stats` 和清理卡片。
 
 之后看 `system.os` 判断系统，读对应的数据布局参考：macOS 读 [references/macos.md](references/macos.md)，Windows 读 [references/windows.md](references/windows.md)（讲该系统东西存哪、怎么辨认、归哪一级）。然后读 `/tmp/storage_scan.json` + `/tmp/storage_analysis.json` 做复核：
@@ -76,7 +78,7 @@ python3 scripts/analyze.py /tmp/storage_scan.json /tmp/storage_analysis.json
 ```bash
 python3 scripts/server.py /tmp/storage_analysis.json   # 自动开浏览器，Ctrl+C 停
 ```
-`server.py` 起在 127.0.0.1 + 随机端口 + 随机 token。🟢 项给「移到废纸篓/回收站」；🟡 项给「在访达打开」+（有安全子路径时）「移到废纸篓/回收站」；🔴 项只给打开位置或正规卸载建议。**安全模型**：`trash` 只允许 green/yellow 的 `trash_paths`，这些白名单路径可以来自主目录，也可以来自外接盘；`open` 允许上述全部 + 橙灯真实 `path` + 红灯 `app_paths`。所有请求 realpath 校验 + 精确白名单校验 + token + Host 校验，每次点击浏览器先 confirm。osascript/SHFileOperationW 入废纸篓，macOS 首次弹访达自动化授权点允许即可。
+`server.py` 起在 127.0.0.1 + 随机端口 + 随机 token。🟢 项给「移到废纸篓/回收站」；🟡 项给「在访达打开」+（有安全子路径时）「移到废纸篓/回收站」；🔴 项只给打开位置或正规卸载建议；**大文件榜和重复文件组只给「在访达打开」**（只读定位，不参与自动删除）。**安全模型**：`trash` 只允许 green/yellow 的 `trash_paths`，这些白名单路径可以来自主目录，也可以来自外接盘；`open` 允许上述全部 + 橙灯真实 `path` + 红灯 `app_paths` + `big_files` 路径 + `duplicates` 所有路径。所有请求 realpath 校验 + 精确白名单校验 + token + Host 校验，每次点击浏览器先 confirm。osascript/SHFileOperationW 入废纸篓，macOS 首次弹访达自动化授权点允许即可。
 
 仅当用户明确只想要一份可分享/留存的只读文件时，才用静态模式（无删除按钮，因为 `file://` 打开的页面碰不到文件系统）：
 ```bash
@@ -85,7 +87,7 @@ python3 scripts/build_report.py /tmp/storage_analysis.json ~/Desktop/storage-rep
 
 **排障：网页上没有移废纸篓按钮** = 要么开的是静态报告（改用 `server.py`），要么 🟢 项漏了 `trash_paths`（补上重启服务）。
 
-报告阅读流（固定顺序）：磁盘总览卡片（容量 + 进度条 + 三色容量 pills + 系统信息）→ 占用排行 Top5 → 🟢🟡🔴 三组视觉卡片。即"现状 → 最大占用 → 可操作项"。页面只保留高频决策和安全操作，文案短、直接、少解释。
+报告阅读流（固定顺序）：磁盘总览卡片（容量 + 分段进度条 + 三色图例 + 系统信息）→ 占用排行 Top5 → 🟢🟡🔴 三组视觉卡片 → 最大单文件 Top 榜 → 重复文件组 → 总结与建议。即「现状 → 最大占用 → 可操作项 → 大文件/重复 → 建议」。UI 是浅色极简线条风（白底 + 发丝级 1px 细线 + 大留白 + 黑灰主色 + 单一靛蓝强调色 + 等宽数字），符合阅读习惯、信息密度高、文案短直接。
 
 注意 `summary.overview` 要写成一句话洞察（直接说最大占用是什么、能释放多少），不要重复总/已用/可用数字——那些已在卡片大数字里显示。
 

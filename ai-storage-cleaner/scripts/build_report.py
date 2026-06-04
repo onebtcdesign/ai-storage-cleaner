@@ -22,6 +22,8 @@ Schema (all sections optional except system):
               content_profile, why_manual, disposal, risk, trash_paths:[...]?, open_note?}],
   "red":    [{name, path, size, cleanup_level(light|medium|deep),
               why_keep, indirect_release, auto_reclaim, app_paths:[...]?}],
+  "big_files": [{name, path, size, kind, ext}],          # largest single files (open-only)
+  "duplicates": [{name, size, count, wasted, kind, paths:[...]}],  # duplicate sets (open-only)
   "denied": ["/path/one", ...],
   "summary": {overview, tier_stats:{green,yellow,red}, priority:[...], long_term:[...]}
 }

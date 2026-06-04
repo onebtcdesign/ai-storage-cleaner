@@ -75,6 +75,17 @@ def load(src):
             rp = expand(p)
             if os.path.exists(rp):
                 open_allow.add(rp)
+    # 大文件 / 重复文件：只给"在文件管理器打开"，让用户自己审查删除（非破坏性，不进 trash 白名单）
+    for it in data.get("big_files", []):
+        if it.get("path"):
+            rp = expand(it["path"])
+            if os.path.exists(rp):
+                open_allow.add(rp)
+    for g in data.get("duplicates", []):
+        for p in (g.get("paths") or []):
+            rp = expand(p)
+            if os.path.exists(rp):
+                open_allow.add(rp)
     return data, tpl, trash_allow, open_allow
 
 
