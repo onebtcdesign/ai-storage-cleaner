@@ -14,9 +14,12 @@ Output shape (same on both OSes):
   "system": {os, build, arch, user, home, computer_name, filesystem,
              disk_total, disk_used, disk_free, purgeable,
              disks: [{name, mount, total, used, free, external}]},   # all volumes/drives
-  "groups": { "<group>": [{name, path, size_kb, size_h}], ... }
+  "groups": { "<group>": [{name, path, size_kb, size_h}], ... },
+  "big_files": [{name, path, size_kb, size_h, ext}],          # largest single files
+  "duplicates": [{size_kb, size_h, count, wasted_kb, wasted_h, paths:[...]}]
 }
 """
+import hashlib
 import json
 import os
 import shutil
@@ -54,29 +57,41 @@ def run(cmd, timeout=180):
 
 
 def du_children(path, min_kb=51200, limit=40):
-    """Size every immediate child of `path` via du, sorted desc. macOS."""
+    """Size every immediate child of `path`, sorted desc. macOS.
+
+    One `du -k -d 1` call sizes all direct children at once (much faster than
+    spawning du per child). The parent's own line is dropped; symlinked
+    children are skipped to match the old behavior.
+    """
     if not os.path.isdir(path):
         return []
-    results = []
     try:
-        entries = sorted(os.listdir(path))
+        # Probe readability first so we still emit a clear denied marker.
+        os.listdir(path)
     except PermissionError:
         return [{"name": "(permission denied)", "path": path,
                  "size_kb": 0, "size_h": "?", "denied": True}]
-    for name in entries:
-        if name in (".", ".."):
-            continue
-        child = os.path.join(path, name)
-        if os.path.islink(child):
-            continue
-        out = run(["du", "-sk", child], timeout=120)
-        m = re.match(r"\s*(\d+)", out)
+    # -d 1: one level deep; -k: KB. Errors on unreadable subdirs go to stderr
+    # and are ignored, the readable children still come back on stdout.
+    out = run(["du", "-k", "-d", "1", path], timeout=600)
+    root = os.path.realpath(path)
+    results = []
+    for line in out.splitlines():
+        m = re.match(r"\s*(\d+)\s+(.*)$", line)
         if not m:
             continue
         kb = int(m.group(1))
+        child = m.group(2)
+        if os.path.realpath(child) == root:
+            continue  # the parent total line
+        if os.path.dirname(child.rstrip("/")) != path.rstrip("/"):
+            continue  # defensive: keep only direct children
+        if os.path.islink(child):
+            continue
         if kb < min_kb:
             continue
-        results.append({"name": name, "path": child, "size_kb": kb, "size_h": human(kb)})
+        results.append({"name": os.path.basename(child.rstrip("/")), "path": child,
+                        "size_kb": kb, "size_h": human(kb)})
     results.sort(key=lambda r: r["size_kb"], reverse=True)
     return results[:limit]
 
@@ -363,21 +378,158 @@ def scan_windows():
 
 
 # ======================================================================
+# Big single files + duplicate detection (cross-platform)
+# ======================================================================
+BIG_FILE_MIN_KB = 51200        # 50 MB: floor for "large single file" candidates
+BIG_FILE_TOP = 40              # how many big files to surface in the report
+DUP_MIN_KB = 51200             # only dedup files this large (where it pays off)
+DUP_MAX_GROUPS = 40
+
+
+def _file_ext(path):
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    return ext or "(no ext)"
+
+
+def find_big_files_macos(roots, min_kb=BIG_FILE_MIN_KB):
+    """List candidate big files via find (C-speed), then stat each for size.
+
+    find does not follow symlinks by default (no loops). -x keeps it on the
+    starting filesystem, so a home scan won't descend into mounted volumes.
+    """
+    seen, out = set(), []
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        res = run(["find", "-x", root, "-type", "f", "-size", "+%dk" % min_kb], timeout=600)
+        for path in res.splitlines():
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            try:
+                if os.path.islink(path):
+                    continue
+                kb = os.path.getsize(path) // 1024
+            except OSError:
+                continue
+            if kb < min_kb:
+                continue
+            out.append({"name": os.path.basename(path), "path": path,
+                        "size_kb": kb, "size_h": human(kb), "ext": _file_ext(path)})
+    out.sort(key=lambda r: r["size_kb"], reverse=True)
+    return out
+
+
+def walk_big_files(roots, min_kb=BIG_FILE_MIN_KB):
+    """Pure os.walk variant (Windows): collect files >= min_kb."""
+    seen, out = set(), []
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        for dirpath, _dirs, filenames in os.walk(root):
+            for name in filenames:
+                p = os.path.join(dirpath, name)
+                if p in seen:
+                    continue
+                try:
+                    if os.path.islink(p):
+                        continue
+                    kb = os.path.getsize(p) // 1024
+                except OSError:
+                    continue
+                if kb < min_kb:
+                    continue
+                seen.add(p)
+                out.append({"name": name, "path": p, "size_kb": kb,
+                            "size_h": human(kb), "ext": _file_ext(p)})
+    out.sort(key=lambda r: r["size_kb"], reverse=True)
+    return out
+
+def _chunk_hash(path, size_bytes, chunk=262144):
+    """Cheap content fingerprint: sha1 of head + tail chunks (+ exact size).
+
+    Reading only the first and last 256 KB makes this fast on huge media files
+    while still being reliable enough to flag genuine duplicates for the user to
+    review. We never claim certainty — the report tells users to verify.
+    """
+    h = hashlib.sha1()
+    h.update(str(size_bytes).encode())
+    try:
+        with open(path, "rb") as f:
+            h.update(f.read(chunk))
+            if size_bytes > chunk * 2:
+                f.seek(-chunk, os.SEEK_END)
+                h.update(f.read(chunk))
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def find_duplicates(big_files, min_kb=DUP_MIN_KB, max_groups=DUP_MAX_GROUPS):
+    """Group big_files by identical size, then confirm with a chunk hash.
+
+    Reuses the already-collected big_files list (no extra disk walk). Only files
+    >= min_kb are considered, since duplicate detection pays off on large files.
+    Returns groups of >= 2 matching paths, sorted by wasted space desc.
+    """
+    by_size = {}
+    for f in big_files:
+        if f["size_kb"] < min_kb:
+            continue
+        by_size.setdefault(f["size_kb"], []).append(f)
+    groups = []
+    for size_kb, files in by_size.items():
+        if len(files) < 2:
+            continue
+        by_hash = {}
+        for f in files:
+            digest = _chunk_hash(f["path"], size_kb * 1024)
+            if digest is None:
+                continue
+            by_hash.setdefault(digest, []).append(f["path"])
+        for paths in by_hash.values():
+            if len(paths) < 2:
+                continue
+            wasted_kb = size_kb * (len(paths) - 1)  # keep one copy
+            groups.append({
+                "size_kb": size_kb, "size_h": human(size_kb),
+                "count": len(paths), "wasted_kb": wasted_kb,
+                "wasted_h": human(wasted_kb), "paths": sorted(paths),
+            })
+    groups.sort(key=lambda g: g["wasted_kb"], reverse=True)
+    return groups[:max_groups]
+
+
+def big_file_roots(system):
+    """Where to hunt for big single files: home + each external volume root."""
+    roots = [HOME]
+    for d in system.get("disks", []):
+        if d.get("external") and d.get("mount"):
+            roots.append(d["mount"])
+    return roots
+
+
+# ======================================================================
 def main():
     started = time.time()
     if sys.platform == "darwin":
         system, groups = scan_macos()
+        big_files = find_big_files_macos(big_file_roots(system))
     elif sys.platform.startswith("win"):
         system, groups = scan_windows()
+        big_files = walk_big_files(big_file_roots(system))
     else:
         print(json.dumps({"error": "unsupported_platform", "platform": sys.platform,
                           "message": "scan.py supports macOS and Windows only."},
                          ensure_ascii=False))
         return
+    duplicates = find_duplicates(big_files)
     data = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "system": system,
         "groups": groups,
+        "big_files": big_files[:BIG_FILE_TOP],
+        "duplicates": duplicates,
         "scan_seconds": round(time.time() - started, 1),
     }
     print(json.dumps(data, ensure_ascii=False, indent=2))
