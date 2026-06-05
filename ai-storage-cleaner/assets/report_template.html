@@ -6,585 +6,135 @@
 <title>存储分析报告</title>
 <style>
   :root{
-    --bg:#f6f7f9; --panel:#ffffff; --panel-soft:#fbfbfc; --ink:#18181b; --sub:#6f7179; --faint:#a0a3ad;
-    --line:#eceef2; --line-2:#dfe3ea; --line-strong:#c9ced8;
-    --accent:#3457d5; --accent-soft:#eef3ff;
-    --green:#14804a; --green-soft:#eaf7f0; --yellow:#a15c07; --yellow-soft:#fff6e8;
-    --red:#c93535; --red-soft:#fff0f0; --blue:#4267b2;
-    --track:#eceff4;
-    --mono:"SF Mono",ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace;
-    --r:8px; --r-sm:6px;
-    --shadow:0 12px 32px rgba(18,24,40,.06);
+    --page:#d8dadd;--app:#fff;--side:#fbfbfc;--soft:#f7f7f8;--ink:#111216;--muted:#6d6f76;--faint:#a2a5ad;
+    --line:#e7e7ea;--line-strong:#d8d9de;--dark:#2b2b31;--dark-2:#1f1f24;--blue:#4f6ff6;--blue-soft:#eef2ff;
+    --green:#22b47a;--green-soft:#eaf8f1;--yellow:#c47a13;--yellow-soft:#fff6e6;--red:#e34d59;--red-soft:#fff0f2;
+    --violet:#b46bea;--cyan:#50d9bd;--track:#ededf0;--shadow:0 18px 45px rgba(20,22,28,.10);
+    --r:8px;--sidebar:242px;--mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html{-webkit-text-size-adjust:100%}
-  body{font-family:-apple-system,"SF Pro SC","PingFang SC",system-ui,sans-serif;
-    background:var(--bg);color:var(--ink);line-height:1.55;
-    padding:0 24px 88px;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1160px;margin:0 auto}
-  ::selection{background:var(--accent-soft)}
-  a{color:var(--accent);text-decoration:none}
-
-  /* header */
-  header{padding:50px 0 24px}
-  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
-    color:var(--faint);display:flex;align-items:center;gap:9px;margin-bottom:16px}
-  .kicker::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);
-    box-shadow:0 0 0 4px var(--accent-soft)}
-  h1{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.18}
-  .meta{color:var(--sub);font-size:12.5px;margin-top:10px;font-family:var(--mono)}
-  .meta b{color:var(--ink);font-weight:600}
-
-  /* generic section */
-  .sec{padding:20px 0 18px}
-  .sec + .sec{margin-top:14px}
-  .sec-title{display:flex;align-items:center;gap:12px;margin-bottom:14px;min-height:32px}
-  .sec-title h2{font-size:15px;font-weight:700;letter-spacing:0}
-  .sec-title .count{font-family:var(--mono);font-size:12px;color:var(--faint)}
-  .sec-title .desc{font-size:12.5px;color:var(--sub);margin-left:auto;text-align:right}
-  .sec-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
-
-
-  /* ===== disk overview ===== */
-  .overview{padding:24px;background:var(--panel);border:1px solid var(--line-2);
-    border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:18px}
-  .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px}
-  .ov-machine{font-size:20px;font-weight:640;letter-spacing:-.01em}
-  .ov-machine span{color:var(--faint);font-weight:400;font-size:13px;margin-left:8px;font-family:var(--mono)}
-  .ov-reclaim{font-family:var(--mono);font-size:12px;color:var(--green);background:var(--green-soft);
-    border-radius:999px;padding:7px 14px;white-space:nowrap}
-  .ov-reclaim b{color:var(--green);font-weight:640}
-
-  /* big numbers row */
-  .nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
-    gap:10px;margin-bottom:22px}
-  .num{padding:16px 18px;background:var(--panel-soft);border:1px solid var(--line);
-    border-radius:var(--r-sm);min-width:0}
-  .num .k{font-size:11px;color:var(--sub);letter-spacing:.04em}
-  .num .v{font-size:26px;font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
-  .num .v.accent{color:var(--green)}
-
-  /* segmented usage line */
-  .usage{margin-bottom:8px}
-  .usage-track{height:10px;border-radius:6px;background:var(--track);overflow:hidden;display:flex;
-    border:1px solid var(--line-2)}
-  .usage-track i{height:100%;display:block;transform-origin:left;animation:grow .8s cubic-bezier(.2,.8,.2,1) both}
-  .usage-track i+i{border-left:1.5px solid #fff}
-  @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-  .seg-green{background:var(--green)} .seg-yellow{background:var(--yellow)}
-  .seg-red{background:var(--red)} .seg-blue{background:var(--line-strong)}
-  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px}
-  .lg{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--sub)}
-  .lg i{width:8px;height:8px;border-radius:2px;flex:none}
-  .lg b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-  .lg.g i{background:var(--green)} .lg.y i{background:var(--yellow)}
-  .lg.r i{background:var(--red)} .lg.b i{background:var(--line-strong)}
-
-  /* disks */
-  .disks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:26px}
-  .disk{border:1px solid var(--line);background:var(--panel-soft);border-radius:var(--r-sm);padding:16px 18px}
-  .disk-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-  .disk-name{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .disk-kind{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
-    color:var(--faint);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;white-space:nowrap}
-  .disk-track{height:6px;border-radius:4px;background:var(--track);overflow:hidden;margin-bottom:9px}
-  .disk-track i{height:100%;display:block;background:var(--ink);transform-origin:left;animation:grow .7s ease both}
-  .disk-track i.ext{background:var(--accent)}
-  .disk-num{font-family:var(--mono);font-size:11.5px;color:var(--sub);font-variant-numeric:tabular-nums}
-
-  /* system spec strip */
-  .spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:18px}
-  .spec > div{padding:13px 14px;background:var(--panel-soft);border-radius:var(--r-sm);
-    font-size:12.5px;min-width:0}
-  .spec .sk{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
-  .spec .sv{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-
-  /* ===== ranking list (Top usage) ===== */
-  .rank{background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);
-    overflow:hidden;box-shadow:var(--shadow)}
-  .rank-row{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:16px;
-    padding:15px 18px;border-bottom:1px solid var(--line);position:relative}
-  .rank-row:last-child{border-bottom:none}
-  .rank-no{font-family:var(--mono);font-size:13px;color:var(--faint);font-variant-numeric:tabular-nums}
-  .rank-main{min-width:0}
-  .rank-name{font-size:14px;font-weight:560;display:flex;align-items:center;gap:9px}
-  .rank-name .dot{flex:none}
-  .rank-meter{height:4px;border-radius:3px;background:var(--track);margin-top:8px;overflow:hidden;max-width:420px}
-  .rank-meter i{display:block;height:100%;background:var(--ink);transform-origin:left;animation:grow .7s ease both}
-  .rank-meter i.green{background:var(--green)} .rank-meter i.yellow{background:var(--yellow)} .rank-meter i.red{background:var(--red)}
-  .rank-sub{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
-  .rank-size{font-size:16px;font-weight:660;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-  .rank-type{font-size:11px;color:var(--sub);text-align:right;margin-top:2px}
-
-  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
-  .dot.green{background:var(--green)} .dot.yellow{background:var(--yellow)}
-  .dot.red{background:var(--red)} .dot.blue{background:var(--blue)}
-
-  /* ===== cleanup cards ===== */
-  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-  .card{padding:18px 18px 16px;border:1px solid var(--line-2);border-radius:var(--r);
-    background:var(--panel);position:relative;display:flex;flex-direction:column;min-height:100%;
-    transition:border-color .15s,box-shadow .15s,transform .15s;box-shadow:var(--shadow)}
-  .card:hover{border-color:var(--line-strong);transform:translateY(-1px)}
-  .card-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:6px}
-  .card-tier{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px}
-  .card.green .card-tier{background:var(--green)} .card.yellow .card-tier{background:var(--yellow)} .card.red .card-tier{background:var(--red)}
-  .card-name{font-size:14.5px;font-weight:650;line-height:1.4;min-width:0;flex:1}
-  .card-badge{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--green);
-    border:1px solid color-mix(in srgb,var(--green) 28%,transparent);background:var(--green-soft);border-radius:999px;
-    padding:1px 6px;white-space:nowrap;align-self:flex-start}
-  .card-badge:empty{display:none}
-  .card-size{font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:2px 0 12px 17px}
-  .card.green .card-size{color:var(--green)} .card.yellow .card-size{color:var(--yellow)} .card.red .card-size{color:var(--red)}
-  .card.cleaned{opacity:.5}
-  .card.cleaned .card-name{text-decoration:line-through}
-  .card-path{font-family:var(--mono);font-size:11px;color:var(--sub);word-break:break-all;
-    background:var(--panel-soft);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:12px;line-height:1.5}
-  .field{margin:10px 0;font-size:13px;color:#30313a}
-  .field .label{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
-    font-weight:640;margin-bottom:4px}
-  .tag{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--accent);
-    background:var(--accent-soft);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0}
-  .risk{font-size:12px;color:var(--yellow);background:var(--yellow-soft);
-    border:1px solid color-mix(in srgb,var(--yellow) 22%,transparent);border-radius:var(--r-sm);
-    padding:8px 11px;margin-top:10px}
-  .note{font-size:11.5px;color:var(--faint);line-height:1.6}
-  .spacer{flex:1}
-
-
-  /* ===== action buttons ===== */
-  .actions{margin-top:14px}
-  .btn-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .btn{font-family:inherit;font-size:12.5px;font-weight:560;cursor:pointer;border-radius:var(--r-sm);
-    padding:7px 13px;border:1px solid var(--line-strong);background:#fff;color:var(--ink);
-    transition:all .14s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-  .btn:hover{border-color:var(--ink);background:var(--ink);color:#fff}
-  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .btn.primary:hover{background:#000}
-  .btn.ghost:hover{background:var(--track);color:var(--ink);border-color:var(--line-strong)}
-  .btn:disabled{opacity:.4;cursor:default;pointer-events:none}
-  .btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7}
-  .status{font-size:12px;font-family:var(--mono)}
-  .status.ok{color:var(--green)} .status.err{color:var(--red)} .status.busy{color:var(--sub)}
-  .act-note{font-size:11.5px;color:var(--faint);margin-top:8px;line-height:1.6}
-
-  /* batch toolbar in section header */
-  .sec-actions .btn{font-size:12px;padding:6px 12px}
-
-  /* ===== big files / duplicates rows ===== */
-  .flist{border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
-  .frow{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:14px;
-    padding:13px 18px;border-bottom:1px solid var(--line);transition:background .14s}
-  .frow:last-child{border-bottom:none}
-  .frow:hover{background:#fafafa}
-  .fkind{font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--sub);
-    border:1px solid var(--line-2);border-radius:5px;padding:3px 8px;min-width:62px;text-align:center}
-  .fmain{min-width:0}
-  .fname{font-size:13.5px;font-weight:540;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .fpath{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
-  .fsize{font-size:14.5px;font-weight:620;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .dup-group{border-bottom:1px solid var(--line)}
-  .dup-group:last-child{border-bottom:none}
-  .dup-head{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:14px;
-    padding:13px 18px;cursor:pointer;user-select:none}
-  .dup-head:hover{background:#fafafa}
-  .dup-wasted{font-size:11px;color:var(--red);font-family:var(--mono)}
-  .dup-paths{padding:0 18px 12px 94px;display:none}
-  .dup-group.open .dup-paths{display:block}
-  .dup-path{font-family:var(--mono);font-size:11px;color:var(--sub);padding:5px 0;
-    border-top:1px dashed var(--line-2);display:flex;align-items:center;gap:8px;word-break:break-all}
-  .dup-path:first-child{border-top:none}
-  .chev{transition:transform .2s;color:var(--faint);flex:none}
-  .dup-group.open .chev{transform:rotate(90deg)}
-
-  /* ===== summary ===== */
-  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0;
-    border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
-  .sum-col{padding:22px 24px;border-right:1px solid var(--line)}
-  .sum-col:last-child{border-right:none}
-  .sum-col h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:640;margin-bottom:12px}
-  .sum-col ul{list-style:none}
-  .sum-col li{font-size:13px;padding:7px 0 7px 18px;position:relative;line-height:1.6}
-  .sum-col li:first-child{border-top:none}
-  .sum-col li::before{content:"";position:absolute;left:0;top:15px;width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
-  .lead{font-size:14px;line-height:1.7;color:var(--ink);padding:18px 20px;border:1px solid var(--line-2);
-    border-radius:var(--r);margin-bottom:14px;background:var(--panel);box-shadow:var(--shadow)}
-  .lead b{font-weight:640}
-
-  .denied{font-size:12.5px;color:var(--yellow);border:1px solid color-mix(in srgb,var(--yellow) 25%,transparent);
-    background:color-mix(in srgb,var(--yellow) 6%,transparent);border-radius:var(--r);padding:14px 16px;margin-top:20px;line-height:1.7}
-  .denied b{display:block;margin-bottom:6px;color:var(--ink)}
-  .denied code{font-family:var(--mono);font-size:11px}
-
-  footer{text-align:center;color:var(--faint);font-size:11.5px;margin-top:48px;
-    font-family:var(--mono);letter-spacing:.04em}
-
-  @media(max-width:680px){
-    body{padding:0 14px 64px}
-    header{padding:36px 0 18px}
-    h1{font-size:24px}
-    .sec{padding:16px 0}
-    .sec-title{align-items:flex-start;flex-wrap:wrap;gap:4px 10px}
-    .sec-title .desc{flex:1 0 100%;margin-left:0;text-align:left}
-    .sec-actions{flex:1 0 100%;margin-left:0}
-    .overview{padding:18px}
-    .ov-machine span{display:block;margin:4px 0 0}
-    .cards{grid-template-columns:1fr}
-    .rank-row{grid-template-columns:26px 1fr auto;gap:11px}
-    .rank-size{font-size:14px}
-    .num .v{font-size:22px}
-    .frow,.dup-head{grid-template-columns:auto 1fr auto;gap:10px}
-    .fkind{display:none}
-    .frow .btn{grid-column:1/-1;justify-content:center}
-    .dup-paths{padding-left:18px}
-    .sum-col{border-right:none;border-bottom:1px solid var(--line)}
-    .sum-col:last-child{border-bottom:none}
-  }
+	  html,body{width:100%;height:100%;min-height:100%;overflow:hidden}
+	  body{background:#fff;color:var(--ink);font-family:-apple-system,"SF Pro SC","PingFang SC",system-ui,sans-serif;line-height:1.45;-webkit-font-smoothing:antialiased}
+	  button{font:inherit}::selection{background:var(--blue-soft)}
+	  .app-shell{width:100vw;height:100vh;display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);background:var(--app);overflow:hidden}
+  .sidebar{min-height:0;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;padding:22px 22px 18px}
+  .brand-mark{width:28px;height:28px;border-radius:7px;background:var(--dark);color:#fff;display:grid;place-items:center;box-shadow:0 7px 15px rgba(0,0,0,.16)}
+  .brand-title{font-size:17px;font-weight:780}.brand-sub{font:10.5px var(--mono);color:var(--faint);margin-top:1px}
+  .icon svg,.brand-mark svg,.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .nav-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 22px 8px;border-top:1px solid var(--line)}
+  .nav{display:grid;gap:6px;padding:6px 14px 16px}
+  .nav-link{display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;color:#1f2026;padding:11px 12px;border-radius:8px;font-size:14px;font-weight:630;text-align:left;cursor:pointer;transition:background .16s,box-shadow .16s,border-color .16s,color .16s}
+  .nav-link:focus{outline:none}
+  .nav-link:focus-visible{box-shadow:0 0 0 3px rgba(47,107,255,.16),0 3px 10px rgba(0,0,0,.06)}
+  .nav-link:hover{background:#fff;border-color:var(--line)}
+  .nav-link.active{background:#fff;border-color:var(--line);box-shadow:0 3px 10px rgba(0,0,0,.06);color:#111}
+  .icon{width:18px;height:18px;display:grid;place-items:center;color:#111;flex:none}
+	  .space-card{margin:auto 18px 18px;padding:13px;border:1px solid var(--line);background:#fff;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,.035)}
+	  .space-card strong{display:block;font-size:13px;margin-bottom:3px}.space-card span{display:block;color:var(--muted);font-size:12px;line-height:1.4}.mini-track{height:5px;background:var(--track);border-radius:999px;overflow:hidden;margin:10px 0}.mini-track i{display:block;height:100%;width:58%;background:linear-gradient(90deg,var(--violet),var(--blue));border-radius:999px}
+	  .main{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);background:#fff}
+  .topbar{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line);background:#fff}
+  .topbar>div:first-child{min-width:0}
+  .kicker{font-size:13px;color:var(--muted);font-weight:650}.kicker b{color:var(--ink);font-weight:780}
+  h1{font-size:22px;line-height:1.2;font-weight:800;letter-spacing:0;margin-top:4px;max-width:min(760px,58vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta{font:11.5px var(--mono);color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta b{color:var(--ink);font-weight:650}
+  .top-actions{display:none}
+	  #app{min-height:0;overflow:hidden}.page{display:none;height:100%;min-height:0}.page.active{display:block}.page-body{height:100%;min-height:0;overflow:auto;padding:20px 22px 0}
+	  .grid{display:grid;gap:14px}.overview-grid{grid-template-columns:minmax(0,1.05fr) minmax(340px,.95fr);align-items:start}.two-grid{grid-template-columns:1fr 1fr}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.035);padding:18px;min-width:0}.panel-title{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;margin-bottom:14px}.panel-title h3{min-width:0;font-size:16px;font-weight:780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel-title span{flex:none;font-size:12px;color:var(--muted)}
+	  .overview-hero{display:flex;flex-direction:column;gap:18px;min-height:254px}.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.eyebrow{font-size:12px;color:var(--muted);font-weight:750}.hero-value{font-size:54px;line-height:1;font-weight:850;letter-spacing:0;color:var(--blue);margin-top:8px}.hero-sub{font-size:13px;color:var(--muted);margin-top:8px;max-width:520px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.quick-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:auto}.quick-stat{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:12px}.quick-stat span{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}.quick-stat b{display:block;font:800 18px var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+	  .storage-card{min-height:254px}.storage-main{display:flex;align-items:baseline;gap:7px;margin-bottom:14px}.storage-main strong{font:850 28px var(--mono)}.storage-main span{font-size:13px;color:var(--muted)}.storage-bar{height:13px;border-radius:999px;background:var(--track);overflow:hidden;display:flex}.storage-bar i{display:block;height:100%;min-width:2px}.storage-bar .green{background:var(--green)}.storage-bar .yellow{background:var(--yellow)}.storage-bar .red{background:var(--red)}.storage-bar .blue{background:var(--blue)}.compact-legend{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin-top:16px}.compact-item{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px;color:var(--muted)}.compact-item b{font:700 12px var(--mono);color:var(--ink)}
+	  .overview-list{display:grid;gap:0}.overview-row{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:11px 2px}.overview-row:last-child{border-bottom:none}.overview-row .item-name{font-size:13px}.overview-row .item-path{font-size:10.5px}
+	  .hero-panel{display:grid;grid-template-columns:190px minmax(0,1fr);gap:24px;align-items:center}
+  .donut{--g:0deg;--y:0deg;--rseg:0deg;--b:0deg;width:174px;aspect-ratio:1;border-radius:50%;margin:auto;position:relative;background:conic-gradient(var(--green) 0 var(--g),var(--yellow) var(--g) calc(var(--g) + var(--y)),var(--red) calc(var(--g) + var(--y)) calc(var(--g) + var(--y) + var(--rseg)),var(--blue) calc(var(--g) + var(--y) + var(--rseg)) calc(var(--g) + var(--y) + var(--rseg) + var(--b)),var(--track) 0)}.donut:after{content:"";position:absolute;inset:34px;border-radius:50%;background:#fff;border:1px solid var(--line)}.donut-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center;z-index:1}.donut-center strong{display:block;font-size:24px;font-weight:800}.donut-center span{display:block;font-size:11.5px;color:var(--muted);margin-top:4px}
+  .metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 13px;min-width:0}.metric .label{font-size:11px;color:var(--muted);margin-bottom:3px}.metric .value{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .value.good{color:var(--blue)}.metric.wide{grid-column:1/-1}.insight{font-size:13px;color:#333740;line-height:1.65}
+  .cta-panel{display:flex;flex-direction:column;justify-content:space-between;gap:16px}.reclaim-big .label{font-size:12px;color:var(--muted);margin-bottom:8px}.reclaim-big .value{font-size:38px;line-height:1.05;color:var(--blue);font-weight:820}.reclaim-big .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:8px 13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:0 0 auto;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;transition:background .16s,border-color .16s,color .16s,transform .16s,box-shadow .16s}.btn:hover{border-color:var(--dark);transform:translateY(-1px)}.btn.primary{background:var(--dark);border-color:var(--dark);color:#fff;box-shadow:0 7px 15px rgba(0,0,0,.20)}.btn.primary:hover{background:#111;color:#fff}.btn.ghost{background:#fff}.btn.subtle{background:var(--soft);color:var(--muted)}.btn:disabled{opacity:.42;pointer-events:none;transform:none}.btn-row{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}.status{font:12px var(--mono)}.status.ok{color:var(--green)}.status.err{color:var(--red)}.status.busy{color:var(--muted)}.act-note{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:8px}
+  .legend-list,.rank-list,.file-list,.app-list,.dup-list,.decision-list{display:grid;gap:8px}.legend-row,.bar-row,.file-row,.app-row,.rank-row,.decision-row{display:grid;align-items:center;gap:12px;min-width:0}
+  .legend-row{grid-template-columns:10px 1fr auto;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.swatch{width:9px;height:9px;border-radius:3px;background:var(--track)}.swatch.green{background:var(--green)}.swatch.yellow{background:var(--yellow)}.swatch.red{background:var(--red)}.swatch.blue{background:var(--blue)}.swatch.cyan{background:var(--cyan)}.legend-name{font-size:13px;color:var(--muted)}.legend-value{font:12px var(--mono);color:var(--ink)}
+  .bar-row{grid-template-columns:30px minmax(0,1fr) 92px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px}.bar-icon,.app-icon,.file-avatar,.data-icon{width:26px;height:26px;border-radius:8px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;flex:none}.data-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.data-icon.violet{background:#f5ecff;color:#9a55d4}.data-icon.cyan{background:#eafaf7;color:#18a98d}.data-icon.green{background:var(--green-soft);color:var(--green)}.bar-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bar-track{height:7px;background:var(--track);border-radius:999px;overflow:hidden;min-width:0}.bar-row .bar-track{grid-column:2/-1}.bar-track i{display:block;height:100%;border-radius:999px;background:var(--blue);transform-origin:left;animation:grow .65s cubic-bezier(.2,.8,.2,1) both}.bar-track i.green{background:var(--green)}.bar-track i.yellow{background:var(--yellow)}.bar-track i.red{background:var(--red)}.bar-track i.cyan{background:var(--cyan)}.bar-size,.item-size{font:700 12.5px var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .analysis-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.rank-row{grid-template-columns:42px minmax(0,1fr) 150px 110px;background:#fff;border-bottom:1px solid var(--line);padding:13px 4px}.rank-list{gap:0}.rank-head{display:grid;grid-template-columns:42px minmax(0,1fr) 150px 110px;gap:12px;padding:0 4px 10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.rank-no{font:12px var(--mono);color:var(--faint)}.item-main{min-width:0}.item-name{font-size:13.5px;font-weight:760;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.item-path{font:11px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.item-kind{font-size:12px;color:var(--muted);text-align:right}.rank-meter{height:6px;background:var(--track);border-radius:999px;overflow:hidden}.rank-meter i{display:block;height:100%;border-radius:999px;background:var(--blue)}.rank-meter i.green{background:var(--green)}.rank-meter i.yellow{background:var(--yellow)}.rank-meter i.red{background:var(--red)}
+  .decision-panel{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr)}.decision-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.decision-tab{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;font-weight:750;cursor:pointer}.decision-tab.active{border-color:var(--dark);color:var(--ink);box-shadow:0 4px 10px rgba(0,0,0,.05)}.decision-tab .count{font:11px var(--mono);color:inherit}.decision-page{display:none;min-height:0}.decision-page.active{display:block}.decision-list{max-height:calc(100vh - 430px);overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .decision-row{grid-template-columns:minmax(0,1fr) 105px minmax(170px,auto);background:#fff;border-bottom:1px solid var(--line);padding:13px 14px}.decision-row:last-child{border-bottom:none}.decision-row.cleaned{opacity:.55}.decision-row.cleaned .item-name{text-decoration:line-through}.decision-size{font:800 14px var(--mono);font-variant-numeric:tabular-nums;text-align:right}.decision-row.green .decision-size{color:var(--green)}.decision-row.yellow .decision-size{color:var(--yellow)}.decision-row.red .decision-size{color:var(--red)}.decision-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px;color:var(--muted);font-size:12px}.tag{display:inline-block;font:10.5px var(--mono);color:var(--blue);background:var(--blue-soft);border-radius:999px;padding:2px 7px}.risk{display:inline-block;color:var(--yellow);background:var(--yellow-soft);border:1px solid rgba(196,122,19,.18);border-radius:999px;padding:2px 7px}.note{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .file-row{grid-template-columns:42px minmax(0,1fr) 95px 100px auto;background:#fff;border-bottom:1px solid var(--line);padding:12px 2px}.file-row:last-child{border-bottom:none}.kind-pill{font:10.5px var(--mono);color:var(--blue);background:var(--blue-soft);border-radius:999px;padding:4px 8px;text-align:center;white-space:nowrap}
+  .dup-group{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.dup-head{display:grid;grid-template-columns:18px minmax(0,1fr) 90px 110px auto;align-items:center;gap:10px;padding:12px;cursor:pointer;user-select:none}.dup-head:hover{background:var(--soft)}.dup-wasted{font:11px var(--mono);color:var(--red);margin-top:2px}.dup-paths{display:none;padding:0 12px 12px 40px}.dup-group.open .dup-paths{display:block}.dup-path{display:flex;align-items:center;gap:8px;border-top:1px dashed var(--line);padding:7px 0;font:11px var(--mono);color:var(--muted);word-break:break-all}.dup-toggle{transition:transform .18s;color:var(--faint)}.dup-group.open .dup-toggle{transform:rotate(90deg)}
+  .app-row{grid-template-columns:28px minmax(0,1fr) minmax(120px,.55fr) 88px auto;background:#fff;border-bottom:1px solid var(--line);padding:12px 2px}.app-row:last-child{border-bottom:none}.app-icon{font-weight:800;font-size:12px}
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.summary-block{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px}.summary-block h3{font-size:12px;color:var(--muted);text-transform:uppercase;margin-bottom:7px}.summary-block ul{list-style:none;display:grid;gap:7px}.summary-block li{font-size:12.5px;color:#303238;line-height:1.5;padding-left:14px;position:relative}.summary-block li:before{content:"";position:absolute;left:0;top:.68em;width:5px;height:5px;border-radius:50%;background:var(--dark)}
+	  .denied{font-size:12px;color:var(--yellow);border:1px solid rgba(196,122,19,.24);background:var(--yellow-soft);border-radius:8px;padding:13px 14px}.denied b{display:block;color:var(--ink);margin-bottom:6px}.denied code{display:block;font:11px var(--mono);line-height:1.55;word-break:break-all}.empty{border:1px dashed var(--line-strong);border-radius:8px;padding:24px;text-align:center;color:var(--muted);background:rgba(255,255,255,.58)}footer{display:none}
+	  @media(max-width:1060px){html,body{overflow:auto}.app-shell{height:auto;min-height:100vh;grid-template-columns:1fr}.sidebar{position:sticky;top:0;z-index:10}.brand{padding:14px}.nav-label,.space-card{display:none}.nav{display:flex;overflow:auto;padding:8px 10px 10px}.nav-link{white-space:nowrap;flex:none}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{max-width:100%}.top-actions{justify-content:flex-start}.overview-grid,.two-grid{grid-template-columns:1fr}.hero-panel{grid-template-columns:1fr}.quick-stats,.compact-legend{grid-template-columns:1fr}.hero-top{flex-direction:column}.hero-value{font-size:42px}.hero-sub{white-space:normal}.decision-list{max-height:none}.page,.page.active{height:auto}.page-body{overflow:visible}.rank-head{display:none}.rank-row{grid-template-columns:34px minmax(0,1fr) 95px}.rank-row .rank-meter{grid-column:2/-1}.decision-row{grid-template-columns:1fr}.decision-size{text-align:left}.decision-row .btn-row{justify-content:flex-start}.file-row{grid-template-columns:42px minmax(0,1fr) 86px}.file-row .kind-pill,.file-row .btn{grid-column:2/-1;justify-self:start}.dup-head{grid-template-columns:18px minmax(0,1fr) 84px}.dup-head .kind-pill,.dup-head .btn{grid-column:2/-1;justify-self:start}.app-row{grid-template-columns:28px minmax(0,1fr) 76px}.app-row .bar-track,.app-row .btn{grid-column:2/-1;justify-self:start}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="kicker">AI Storage Cleaner</div>
-    <h1 id="title">存储分析报告</h1>
-    <div class="meta" id="meta"></div>
-  </header>
-  <div id="app"></div>
-  <footer>ai-storage-cleaner · 只读分析 · 安全清理只移到废纸篓/回收站</footer>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M7 20h10"/><path d="M6 16l3-9h6l3 9"/><path d="M9 13h6"/></svg></div><div><div class="brand-title">AI Storage Cleaner</div><div class="brand-sub">HTML REPORT</div></div></div>
+    <div class="nav-label">Main Menu</div>
+    <nav class="nav" aria-label="报告模块">
+      <button class="nav-link active" type="button" data-page="overview"><span class="icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/></svg></span>概览</button>
+      <button class="nav-link" type="button" data-page="analysis"><span class="icon"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M8 17V9"/><path d="M12 17V7"/><path d="M16 17v-5"/><path d="M20 17V8"/></svg></span>存储分析</button>
+      <button class="nav-link" type="button" data-page="big-files"><span class="icon"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>大文件</button>
+      <button class="nav-link" type="button" data-page="duplicates"><span class="icon"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><rect x="5" y="5" width="11" height="11" rx="2"/></svg></span>重复文件</button>
+      <button class="nav-link" type="button" data-page="applications"><span class="icon"><svg viewBox="0 0 24 24"><path d="M8 6h8"/><path d="M9 6l1-3h4l1 3"/><rect x="5" y="6" width="14" height="15" rx="2"/><path d="M9 10v7"/><path d="M15 10v7"/></svg></span>应用程序</button>
+    </nav>
+	    <div class="space-card"><strong>安全模式</strong><span>只读扫描，可恢复清理。</span><div class="mini-track"><i></i></div></div>
+  </aside>
+	  <main class="main">
+		    <div class="topbar"><div><div class="kicker">AI Storage Cleaner <b>› Dashboard</b></div><h1 id="title">存储分析报告</h1><div class="meta" id="meta"></div></div></div>
+    <div id="app"></div>
+    <footer>ai-storage-cleaner · 只读分析 · 安全清理只移到废纸篓/回收站</footer>
+  </main>
 </div>
 <script>
 const DATA = __REPORT_DATA__;
-const DELETE = __DELETE_CONFIG__; // null=静态只读报告；{token,endpoint}=server.py 一键安全清理
+const DELETE = __DELETE_CONFIG__;
 const FM = (DATA.system && /win/i.test(DATA.system.os||'')) ? '资源管理器' : '访达';
 let CLEANED_PATHS = new Set();
-
+let ACTIVE_PAGE = 'overview';
+let ACTIVE_DECISION = 'green';
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const cleanSize = s => String(s==null?'':s).replace(/[（(]\s*估算[^）)]*[）)]/g,'').trim();
 const b64 = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 const unb64 = s => JSON.parse(decodeURIComponent(escape(atob(s))));
-
-function parseGB(str){
-  if(!str) return 0;
-  const m=String(str).match(/([\d.]+)\s*(TB|GB|MB)?/i);
-  if(!m) return 0;
-  let v=parseFloat(m[1]); const u=(m[2]||'GB').toUpperCase();
-  if(u==='TB') v*=1024; else if(u==='MB') v/=1024;
-  return v;
-}
-const fmtGB = v => v>0 ? (v>=1024?`${(v/1024).toFixed(1)} TB`:`${v.toFixed(1)} GB`) : '—';
-
-const ICON = {
-  finder:'<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M9 5v14"/></svg>',
-  trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
-};
-
-/* ===== overview ===== */
-function renderOverview(s, sm){
-  const title = DATA.report?.title || `${s.computer_name||s.user||'这台电脑'} 的存储分析报告`;
-  document.getElementById('title').textContent = title;
-  document.title = title;
-  document.getElementById('meta').innerHTML =
-    `生成于 <b>${esc(DATA.generated_at)}</b> · 扫描耗时 <b>${esc(DATA.scan_seconds||'?')}s</b> · 只读分析`;
-
-  const total = parseGB(s.disk_total)||1, used = parseGB(s.disk_used);
-  const ts = sm && sm.tier_stats;
-  const g = ts?parseGB(ts.green):0, y = ts?parseGB(ts.yellow):0, r = ts?parseGB(ts.red):0;
-  const other = Math.max(0, used-g-y-r);
-  const seg=(v,cls,label)=> v>0?`<i class="${cls}" style="width:${(v/total*100).toFixed(2)}%" title="${label}：${fmtGB(v)}"></i>`:'';
-  const bar = (g||y||r) ? seg(g,'seg-green','可自动清')+seg(y,'seg-yellow','需手动')+seg(r,'seg-red','谨慎清理')+seg(other,'seg-blue','系统及其他')
-    : `<i class="seg-blue" style="width:${(used/total*100).toFixed(2)}%"></i>`;
-  const legend = (g||y||r) ? `<div class="legend">
-    <span class="lg g"><i></i>可自动清 <b>${fmtGB(g)}</b></span>
-    <span class="lg y"><i></i>需手动 <b>${fmtGB(y)}</b></span>
-    <span class="lg r"><i></i>谨慎清理 <b>${fmtGB(r)}</b></span>
-    <span class="lg b"><i></i>系统及其他 <b>${fmtGB(other)}</b></span>
-  </div>` : '';
-
-  const disks = (s.disks||[]).map(d=>{
-    const u=parseGB(d.used), t=parseGB(d.total)||1, pct=Math.min(100,u/t*100);
-    return `<div class="disk">
-      <div class="disk-top"><span class="disk-name">${esc(d.name||d.mount||'磁盘')}</span>
-        <span class="disk-kind">${d.external?'外接盘':'系统盘'}</span></div>
-      <div class="disk-track"><i class="${d.external?'ext':''}" style="width:${pct.toFixed(1)}%"></i></div>
-      <div class="disk-num">${esc(d.used)} / ${esc(d.total)} · 余 ${esc(d.free||'—')}</div>
-    </div>`;
-  }).join('');
-
-  const spec = [
-    ['系统', `${esc(s.os)} ${s.build?'('+esc(s.build)+')':''}`],
-    ['架构', esc(s.arch)], ['文件系统', esc(s.filesystem)],
-    ['用户', esc(s.user)], ['主目录', esc(s.home)],
-  ].filter(x=>x[1]&&x[1]!=='undefined').map(x=>`<div><div class="sk">${x[0]}</div><div class="sv">${x[1]}</div></div>`).join('');
-
-  return `<div class="overview">
-    <div class="ov-head">
-      <div class="ov-machine">${esc(s.computer_name||s.user||'这台电脑')}<span>本机 + 可见外接盘</span></div>
-      ${g>0?`<div class="ov-reclaim">可安全清理 <b>${fmtGB(g)}</b></div>`:''}
-    </div>
-    <div class="nums">
-      <div class="num"><div class="k">系统盘总量</div><div class="v">${esc(s.disk_total)}</div></div>
-      <div class="num"><div class="k">已用</div><div class="v">${esc(s.disk_used)}</div></div>
-      <div class="num"><div class="k">可用</div><div class="v">${esc(s.disk_free)}</div></div>
-      ${s.purgeable?`<div class="num"><div class="k">可清除(系统)</div><div class="v">${esc(s.purgeable)}</div></div>`:''}
-      ${g>0?`<div class="num"><div class="k">已识别可清理</div><div class="v accent">${fmtGB(g)}</div></div>`:''}
-    </div>
-    <div class="usage"><div class="usage-track">${bar}</div>${legend}</div>
-    <div class="disks">${disks}</div>
-    <div class="spec">${spec}</div>
-  </div>`;
-}
-
-/* ===== Top usage ranking ===== */
-function renderRank(rows){
-  if(!rows||!rows.length) return '';
-  const max = Math.max(...rows.map(r=>parseGB(r.size)))||1;
-  const body = rows.map(r=>{
-    const gb = parseGB(r.size);
-    return `<div class="rank-row">
-      <div class="rank-no">${String(r.rank).padStart(2,'0')}</div>
-      <div class="rank-main">
-        <div class="rank-name"><span class="dot ${esc(r.tier)}"></span>${esc(r.name)}</div>
-        <div class="rank-meter"><i class="${esc(r.tier)}" style="width:${(gb/max*100).toFixed(1)}%"></i></div>
-        <div class="rank-sub">${esc(r.path)}</div>
-      </div>
-      <div><div class="rank-size">${esc(cleanSize(r.size))}</div><div class="rank-type">${esc(r.type)}</div></div>
-    </div>`;
-  }).join('');
-  return sec('占用排行', `Top ${rows.length}`, '最大占用项 · 已按级别着色', `<div class="rank">${body}</div>`);
-}
-
-/* ===== cleanup cards ===== */
-function card(tier, name, size, path, inner){
-  return `<div class="card ${tier}">
-    <div class="card-head"><span class="card-tier"></span>
-      <span class="card-name">${esc(name)}</span><span class="card-badge"></span></div>
-    ${size?`<div class="card-size">${esc(cleanSize(size))}</div>`:''}
-    <div class="card-path">${esc(path)}</div>
-    ${inner}
-  </div>`;
-}
-
-function renderGreen(items){
-  if(!items||!items.length) return '';
-  const cards = items.map(it=>{
-    const procs = (it.kill_processes&&it.kill_processes.length)
-      ? it.kill_processes.map(p=>`<span class="tag">${esc(p)}</span>`).join('')
-      : `<span class="note">无需关闭任何进程</span>`;
-    const inner = `<div class="field"><div class="label">类型</div><span class="note">可再生缓存 / 临时文件，适合优先处理</span></div>
-      <div class="field"><div class="label">清理前需关闭</div>${procs}</div>
-      <div class="spacer"></div>${trashBlock(it)}`;
-    return card('green', it.name, it.size_estimate, it.path, inner);
-  }).join('');
-  return sec('可自动清理', `${items.length} 项`, '可再生，删了能重建', `<div class="cards">${cards}</div>`, greenBatch(items));
-}
-
-function renderYellow(items){
-  if(!items||!items.length) return '';
-  const cards = items.map(it=>{
-    const inner = `<div class="field"><div class="label">内容</div>${esc(it.content_profile)}</div>
-      <div class="field"><div class="label">建议</div>${esc(it.disposal)}</div>
-      ${it.risk?`<div class="risk">${esc(it.risk)}</div>`:''}
-      <div class="spacer"></div>${yellowBlock(it)}`;
-    return card('yellow', it.name, it.size, it.path, inner);
-  }).join('');
-  return sec('需要确认', `${items.length} 项`, '含用户数据，先看再决定', `<div class="cards">${cards}</div>`);
-}
-
-function renderRed(items){
-  if(!items||!items.length) return '';
-  const cards = items.map(it=>{
-    const inner = `<div class="field"><div class="label">为何不建议手删</div>${esc(it.why_keep)}</div>
-      <div class="field"><div class="label">卸载 / 释放建议</div>${esc(it.indirect_release)}</div>
-      ${it.auto_reclaim?`<div class="field"><div class="label">是否自动回收</div>${esc(it.auto_reclaim)}</div>`:''}
-      <div class="spacer"></div>${redBlock(it)}`;
-    return card('red', it.name, it.size||'', it.path, inner);
-  }).join('');
-  return sec('谨慎处理', `${items.length} 项`, '建议走正规卸载流程', `<div class="cards">${cards}</div>`);
-}
-
-/* ===== big single files ===== */
-function renderBigFiles(items){
-  if(!items||!items.length) return '';
-  const canOpen = !!DELETE;
-  const rows = items.map(it=>`<div class="frow">
-    <span class="fkind">${esc(it.kind||'文件')}</span>
-    <div class="fmain"><div class="fname">${esc(it.name)}</div><div class="fpath">${esc(it.path)}</div></div>
-    <span class="fsize">${esc(cleanSize(it.size))}</span>
-    ${canOpen?`<button class="btn ghost" onclick="openPath(this)" data-open="${b64([it.path])}">${ICON.finder}在${FM}打开</button>`
-      :`<span class="note">${esc(it.kind||'')}</span>`}
-  </div>`).join('');
-  return sec('最大单文件', `Top ${items.length}`, '藏在目录里的大文件，确认后自行处理', `<div class="flist">${rows}</div>`);
-}
-
-/* ===== duplicates ===== */
-function renderDuplicates(items){
-  if(!items||!items.length) return '';
-  const canOpen = !!DELETE;
-  const totalWasted = items.reduce((a,it)=>a+parseGB(it.wasted),0);
-  const rows = items.map((it,i)=>{
-    const paths = (it.paths||[]).map(p=>`<div class="dup-path">
-      ${canOpen?`<button class="btn ghost" style="padding:3px 9px" onclick="openPath(this)" data-open="${b64([p])}">${ICON.finder}</button>`:''}
-      <span>${esc(p)}</span></div>`).join('');
-    return `<div class="dup-group" id="dup${i}">
-      <div class="dup-head" onclick="document.getElementById('dup${i}').classList.toggle('open')">
-        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
-        <div class="fmain"><div class="fname">${esc(it.name)} <span style="color:var(--faint);font-weight:400">×${it.count}</span></div>
-          <div class="dup-wasted">可省 ${esc(cleanSize(it.wasted))} · 保留 1 份即可</div></div>
-        <span class="fkind">${esc(it.kind||'文件')}</span>
-        <span class="fsize">${esc(cleanSize(it.size))}</span>
-      </div>
-      <div class="dup-paths">${paths}</div>
-    </div>`;
-  }).join('');
-  const desc = totalWasted>0?`重复副本合计可省约 ${fmtGB(totalWasted)} · 点击展开`:'点击展开看副本路径';
-  return sec('重复文件', `${items.length} 组`, desc, `<div class="flist">${rows}</div>`);
-}
-
-/* ===== summary ===== */
-function renderSummary(sm){
-  if(!sm) return '';
-  const lead = sm.overview?`<div class="lead">${esc(sm.overview)}</div>`:'';
-  const cols = [];
-  if(sm.priority&&sm.priority.length) cols.push(['清理优先级', sm.priority]);
-  if(sm.long_term&&sm.long_term.length) cols.push(['长期建议', sm.long_term]);
-  const grid = cols.length?`<div class="summary">${cols.map(c=>`<div class="sum-col">
-    <h3>${esc(c[0])}</h3><ul>${c[1].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div>`:'';
-  if(!lead&&!grid) return '';
-  return sec('总结与建议', '', '', lead+grid);
-}
-
-function renderDenied(){
-  if(!DATA.denied||!DATA.denied.length) return '';
-  return `<div class="denied"><b>以下目录权限不足未能读取，可能遗漏体量</b>${DATA.denied.map(p=>`<code>${esc(p)}</code>`).join('<br>')}</div>`;
-}
-
-/* section wrapper */
-function sec(title, count, desc, inner, actions){
-  return `<section class="sec">
-    <div class="sec-title"><h2>${esc(title)}</h2>${count?`<span class="count">${esc(count)}</span>`:''}
-      ${actions?`<span class="sec-actions">${actions}</span>`:(desc?`<span class="desc">${esc(desc)}</span>`:'')}</div>
-    ${inner}</section>`;
-}
-
-/* ===== action blocks (only when server.py provides DELETE) ===== */
-function trashBlock(it){
-  if(!DELETE || !it.trash_paths || !it.trash_paths.length) return '';
-  return `<div class="actions del-actions" data-paths="${b64(it.trash_paths)}" data-open="${b64(it.trash_paths)}">
-    <div class="btn-row">
-      <button class="btn ghost" onclick="openPath(this)">${ICON.finder}在${FM}打开</button>
-      <button class="btn primary" onclick="doTrash(this)">${ICON.trash}移到废纸篓</button>
-      <span class="status"></span>
-    </div>
-    <div class="act-note">先打开确认内容；移到废纸篓可恢复，清空后释放空间。</div>
-  </div>`;
-}
-function yellowBlock(it){
-  if(!DELETE) return '';
-  const hasTrash = it.trash_paths && it.trash_paths.length;
-  const trashBtn = hasTrash?`<button class="btn" onclick="doTrash(this)">${ICON.trash}移废纸篓（确认后）</button>`:'';
-  return `<div class="actions del-actions" data-paths="${hasTrash?b64(it.trash_paths):''}" data-open="${b64([it.path])}">
-    <div class="btn-row">
-      <button class="btn ghost" onclick="openPath(this)">${ICON.finder}在${FM}打开</button>
-      ${trashBtn}<span class="status"></span>
-    </div>
-    <div class="act-note">先打开确认；确定不用再移到废纸篓。${it.open_note?'<br>'+esc(it.open_note):''}</div>
-  </div>`;
-}
-function redBlock(it){
-  if(!DELETE || !it.app_paths || !it.app_paths.length) return '';
-  return `<div class="actions del-actions" data-open="${b64(it.app_paths)}">
-    <div class="btn-row">
-      <button class="btn ghost" onclick="openPath(this)">${ICON.finder}在${FM}打开（去卸载）</button>
-      <span class="status"></span>
-    </div>
-    <div class="act-note">应用需正规卸载，本页只帮你定位。</div>
-  </div>`;
-}
-function greenBatch(items){
-  if(!DELETE || !items.some(it=>it.trash_paths&&it.trash_paths.length)) return '';
-  return `<button class="btn primary" onclick="doBatch(this)">${ICON.trash}全部移废纸篓</button><span class="status"></span>`;
-}
-
-/* ===== network + state ===== */
-function postAction(wrap, paths, mode){
-  const status = wrap.querySelector('.status');
-  const btns = wrap.querySelectorAll('.btn');
-  if(status){ status.textContent='处理中…'; status.className='status busy'; }
-  btns.forEach(b=>b.disabled=true);
-  return fetch(DELETE.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:DELETE.token,paths,mode})})
-    .then(r=>r.json()).then(res=>{btns.forEach(b=>b.disabled=false);return res;})
-    .catch(e=>{btns.forEach(b=>b.disabled=false);return {ok:false,error:'连接失败：'+e};});
-}
-function markCleaned(wrap){
-  const item = wrap.closest('.card');
-  if(item){ item.classList.add('cleaned'); const b=item.querySelector('.card-badge'); if(b) b.textContent='已移废纸篓'; }
-  const st = wrap.querySelector('.status');
-  if(st){ st.textContent='✓ 已移到废纸篓'; st.className='status ok'; }
-  wrap.querySelectorAll('.btn.primary,.btn:not(.ghost)').forEach(b=>{ if(b.textContent.includes('废纸篓')) b.remove(); });
-}
-function doTrash(btn){
-  const wrap = btn.closest('.del-actions');
-  const paths = unb64(wrap.dataset.paths);
-  if(!confirm(`确认移到废纸篓（可恢复）以下 ${paths.length} 个路径？\n\n`+paths.join('\n'))) return;
-  postAction(wrap,paths,'trash').then(res=>{
-    const st = wrap.querySelector('.status');
-    if(res.ok){ markCleaned(wrap); mergeLog(res.log); }
-    else { st.textContent='✗ '+(res.error||'失败'); st.className='status err'; }
-  });
-}
-function doBatch(btn){
-  const actions = btn.closest('.sec-actions');
-  const sec = btn.closest('.sec');
-  const status = actions.querySelector('.status');
-  const wraps = [...sec.querySelectorAll('.card.green .del-actions')].filter(w=>!w.closest('.card').classList.contains('cleaned') && w.dataset.paths);
-  if(!wraps.length){ status.textContent='没有可清理的项了'; status.className='status'; return; }
-  const all=[]; let gb=0;
-  wraps.forEach(w=>{ unb64(w.dataset.paths).forEach(p=>all.push(p));
-    const sz=w.closest('.card').querySelector('.card-size'); if(sz) gb+=parseGB(sz.textContent); });
-  if(!confirm(`确认将这组 ${wraps.length} 项缓存全部移到废纸篓？\n共 ${all.length} 个路径${gb>0?'，约 '+gb.toFixed(1)+' GB':''}。`)) return;
-  postAction(actions,all,'trash').then(res=>{
-    if(res.ok){ status.textContent=`✓ 已移 ${wraps.length} 项`; status.className='status ok';
-      wraps.forEach(markCleaned); actions.querySelectorAll('.btn').forEach(b=>b.remove()); mergeLog(res.log); }
-    else { status.textContent='✗ '+(res.error||'失败'); status.className='status err'; }
-  });
-}
-function openPath(btn){
-  const wrap = btn.closest('[data-open]');
-  const paths = unb64(wrap.dataset.open);
-  postAction(wrap,paths,'open').then(res=>{
-    const st = wrap.querySelector('.status');
-    if(st){ if(res.ok){ st.textContent='✓ 已在'+FM+'打开'; st.className='status ok'; }
-      else { st.textContent='✗ '+(res.error||'失败'); st.className='status err'; } }
-    else if(!res.ok){ alert(res.error||'打开失败'); }
-  });
-}
-function mergeLog(log){
-  if(!log||!log.actions) return;
-  log.actions.forEach(a=>{ if(a.mode==='trash'&&a.path) CLEANED_PATHS.add(a.path); });
-  document.querySelectorAll('.del-actions[data-paths]').forEach(w=>{
-    if(!w.dataset.paths) return;
-    const paths = unb64(w.dataset.paths);
-    if(paths.length && paths.every(p=>CLEANED_PATHS.has(p))) markCleaned(w);
-  });
-}
-
-/* ===== mount ===== */
-document.getElementById('app').innerHTML =
-  renderOverview(DATA.system, DATA.summary)
-  + renderRank(DATA.top5)
-  + renderGreen(DATA.green)
-  + renderYellow(DATA.yellow)
-  + renderRed(DATA.red)
-  + renderBigFiles(DATA.big_files)
-  + renderDuplicates(DATA.duplicates)
-  + renderSummary(DATA.summary)
-  + renderDenied();
-if(DELETE && DELETE.logEndpoint){
-  fetch(DELETE.logEndpoint).then(r=>r.json()).then(mergeLog).catch(()=>{});
-}
+const arr = v => Array.isArray(v) ? v : [];
+function parseGB(str){if(!str)return 0;const m=String(str).match(/([\d.]+)\s*(TB|GB|MB|KB|B)?/i);if(!m)return 0;let v=parseFloat(m[1]);const u=(m[2]||'GB').toUpperCase();if(u==='TB')v*=1024;else if(u==='MB')v/=1024;else if(u==='KB')v/=1024/1024;else if(u==='B')v/=1024/1024/1024;return v}
+	const fmtGB = v => v>0 ? (v>=1024?`${(v/1024).toFixed(1)} TB`:`${v.toFixed(1)} GB`) : '—';
+	const pct = (v,max) => max>0 ? Math.max(0,Math.min(100,v/max*100)) : 0;
+	const brief = (s,n=76) => {s=String(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1)+'…':s};
+const ICON = {finder:'<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M9 5v14"/></svg>',trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>',shield:'<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-5"/></svg>',arrow:'<svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>',drive:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M7 15h.01"/><path d="M11 15h6"/></svg>',folder:'<svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>',file:'<svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>'};
+function dataIcon(i,tone){const icons=[ICON.drive,ICON.folder,ICON.file];const tones=['blue','violet','cyan'];return `<div class="data-icon ${tone||tones[i%3]}">${icons[i%3]}</div>`}
+function tierStats(){const ts=DATA.summary&&DATA.summary.tier_stats;return{green:ts?parseGB(ts.green):0,yellow:ts?parseGB(ts.yellow):0,red:ts?parseGB(ts.red):0}}
+function pageShell(id,title,desc,inner){return `<section class="page" id="page-${id}" data-page="${id}"><div class="page-body">${inner}</div></section>`}
+	function initShell(s){const fullTitle=DATA.report?.title||`${s.computer_name||s.user||'这台电脑'} 的存储分析报告`;const rawTitle=s.computer_name||fullTitle.replace(/\s*的存储分析报告$/,'');const title=rawTitle.replace(/([^\s])的([^\s])/g,'$1 的 $2');document.getElementById('title').textContent=title;document.title=fullTitle;document.getElementById('meta').innerHTML=`<b>${esc(DATA.generated_at||'--')}</b> · ${esc(DATA.scan_seconds||'?')}s · ${DELETE?'安全模式':'只读'}`}
+	function updateTopActions(page){}
+	function renderOverview(s,sm){initShell(s||{});const total=parseGB(s.disk_total)||1,used=parseGB(s.disk_used),free=parseGB(s.disk_free)||Math.max(0,total-used);const t=tierStats();const other=Math.max(0,used-t.green-t.yellow-t.red);const disks=arr(s.disks);const topRows=arr(DATA.top5).slice(0,4).map(r=>`<div class="overview-row"><div class="item-main"><div class="item-name">${esc(r.name)}</div><div class="item-path">${esc(r.path)}</div></div><div class="item-size">${esc(cleanSize(r.size))}</div></div>`).join('');const diskRows=disks.slice(0,5).map((d,i)=>{const u=parseGB(d.used),tt=parseGB(d.total)||1;return `<div class="bar-row">${dataIcon(i,d.external?'cyan':null)}<div class="bar-name" title="${esc(d.mount||d.name||'磁盘')}">${esc(d.name||d.mount||'磁盘')}</div><div class="bar-size">${esc(d.used||'—')}</div><div class="bar-track"><i class="${d.external?'cyan':'blue'}" style="width:${pct(u,tt).toFixed(1)}%"></i></div></div>`}).join('');const storage=[['green','可清理',t.green],['yellow','需确认',t.yellow],['red','谨慎',t.red],['blue','其他',other]].map(x=>`<div class="compact-item"><span class="swatch ${x[0]}"></span><span>${x[1]}</span><b>${fmtGB(x[2])}</b></div>`).join('');const segs=[['green',t.green],['yellow',t.yellow],['red',t.red],['blue',other]].filter(x=>x[1]>0).map(x=>`<i class="${x[0]}" style="width:${pct(x[1],total).toFixed(2)}%"></i>`).join('');return pageShell('overview','概览','',`<div class="grid overview-grid"><div class="panel overview-hero"><div class="hero-top"><div><div class="eyebrow">可释放空间</div><div class="hero-value">${fmtGB(t.green)}</div><div class="hero-sub">${esc(brief(sm?.overview||'先处理低风险项目。',36))}</div></div></div><div class="quick-stats"><div class="quick-stat"><span>已用</span><b>${esc(s.disk_used||fmtGB(used))}</b></div><div class="quick-stat"><span>可用</span><b>${esc(s.disk_free||fmtGB(free))}</b></div><div class="quick-stat"><span>磁盘</span><b>${disks.length||1}</b></div></div></div><div class="panel storage-card"><div class="panel-title"><h3>存储概览</h3><span>${pct(used,total).toFixed(0)}%</span></div><div class="storage-main"><strong>${esc(s.disk_used||fmtGB(used))}</strong><span>/ ${esc(s.disk_total||fmtGB(total))}</span></div><div class="storage-bar">${segs}</div><div class="compact-legend">${storage}</div></div><div class="panel"><div class="panel-title"><h3>重点项</h3><span>Top ${Math.min(arr(DATA.top5).length,4)}</span></div><div class="overview-list">${topRows||'<div class="empty">暂无数据</div>'}</div></div><div class="panel"><div class="panel-title"><h3>磁盘</h3><span>${disks.length||1}</span></div><div class="legend-list">${diskRows||'<div class="empty">暂无磁盘</div>'}</div></div></div>`)}
+	function renderAnalysis(){return pageShell('analysis','存储分析','排行与决策',`<div class="analysis-layout">${renderRank(DATA.top5)}<div class="panel decision-panel"><div class="panel-title"><h3>清理决策</h3><span>绿灯可清理</span></div>${renderDecisions()}</div></div><div style="height:14px"></div>${renderSummary(DATA.summary)}${renderDenied()?'<div style="height:12px"></div>'+renderDenied():''}`)}
+function renderRank(rows){rows=arr(rows);if(!rows.length)return '<div class="panel"><div class="empty">暂无占用排行数据</div></div>';const max=Math.max(...rows.map(r=>parseGB(r.size)))||1;const body=rows.map(r=>{const gb=parseGB(r.size);return `<div class="rank-row"><div class="rank-no">${String(r.rank||'').padStart(2,'0')}</div><div class="item-main"><div class="item-name">${esc(r.name)}</div><div class="item-path">${esc(r.path)}</div></div><div><div class="rank-meter"><i class="${esc(r.tier||'blue')}" style="width:${pct(gb,max).toFixed(1)}%"></i></div><div class="item-kind">${esc(r.type||'')}</div></div><div class="item-size">${esc(cleanSize(r.size))}</div></div>`}).join('');return `<div class="panel"><div class="panel-title"><h3>占用排行</h3><span>Top ${rows.length}</span></div><div class="rank-head"><span>#</span><span>名称</span><span>占比</span><span>大小</span></div><div class="rank-list">${body}</div></div>`}
+function renderDecisions(){const tabs=[['green','可清理',DATA.green],['yellow','需确认',DATA.yellow],['red','谨慎处理',DATA.red]].map(([id,label,items])=>`<button class="decision-tab ${id===ACTIVE_DECISION?'active':''}" type="button" data-decision="${id}" onclick="switchDecision('${id}')"><span class="swatch ${id}"></span>${label}<span class="count">${arr(items).length}</span></button>`).join('');return `<div class="decision-tabs">${tabs}</div>${decisionPage('green',DATA.green,renderGreenRow)}${decisionPage('yellow',DATA.yellow,renderYellowRow)}${decisionPage('red',DATA.red,renderRedRow)}`}
+function decisionPage(tier,items,renderer){items=arr(items);const body=items.length?items.map(it=>renderer(it)).join(''):`<div class="empty">暂无${tier==='green'?'可清理':tier==='yellow'?'需确认':'谨慎处理'}项</div>`;return `<div class="decision-page ${tier===ACTIVE_DECISION?'active':''}" data-decision-page="${tier}"><div class="decision-list">${body}</div></div>`}
+function decisionBase(tier,it,size,meta,actions){return `<div class="decision-row ${tier}"><div class="item-main"><div class="item-name">${esc(it.name)}</div><div class="item-path">${esc(it.path)}</div><div class="decision-meta">${meta}</div></div><div class="decision-size">${esc(cleanSize(size||''))}</div><div class="btn-row">${actions}</div></div>`}
+function renderGreenRow(it){const procs=arr(it.kill_processes).length?arr(it.kill_processes).map(p=>`<span class="tag">${esc(p)}</span>`).join(''):'<span class="note">无需关闭进程</span>';return decisionBase('green',it,it.size_estimate,procs,trashBlock(it))}
+function renderYellowRow(it){const meta=`<span>${esc(it.content_profile||'待确认内容')}</span>${it.risk?`<span class="risk">${esc(it.risk)}</span>`:''}`;return decisionBase('yellow',it,it.size,meta,yellowBlock(it)||'<span class="note">静态预览</span>')}
+function renderRedRow(it){return decisionBase('red',it,it.size,`<span>${esc(it.why_keep||'建议谨慎处理')}</span>`,redBlock(it)||'<span class="note">正规卸载</span>')}
+	function renderBigFiles(items){items=arr(items);const rows=items.map((it,i)=>`<div class="file-row">${dataIcon(i)}<div class="item-main"><div class="item-name">${esc(it.name)}</div><div class="item-path">${esc(it.path)}</div></div><span class="kind-pill">${esc(it.kind||'文件')}</span><div class="item-size">${esc(cleanSize(it.size))}</div>${DELETE?`<button class="btn ghost" onclick="openPath(this)" data-open="${b64([it.path])}">${ICON.finder}访问</button>`:`<span class="note">只读</span>`}</div>`).join('');return pageShell('big-files','大文件','只读定位',`<div class="panel"><div class="panel-title"><h3>最大单文件</h3><span>${items.length}</span></div><div class="file-list">${rows||'<div class="empty">暂无数据</div>'}</div></div>`)}
+	function renderDuplicates(items){items=arr(items);const rows=items.map((it,i)=>{const paths=arr(it.paths);const first=paths[0]||'';const pathsHtml=paths.map(p=>`<div class="dup-path">${DELETE?`<button class="btn ghost" style="padding:4px 8px" onclick="openPath(this)" data-open="${b64([p])}" title="访问">${ICON.finder}</button>`:''}<span>${esc(p)}</span></div>`).join('');return `<div class="dup-group" id="dup${i}"><div class="dup-head" onclick="document.getElementById('dup${i}').classList.toggle('open')"><svg class="dup-toggle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg><div class="item-main"><div class="item-name">${esc(it.name)} <span class="note">×${esc(it.count||paths.length)}</span></div><div class="dup-wasted">可省 ${esc(cleanSize(it.wasted))}</div></div><span class="kind-pill">${esc(it.kind||'文件')}</span><span class="item-size">${esc(cleanSize(it.size))}</span>${DELETE&&first?`<button class="btn ghost" onclick="event.stopPropagation();openPath(this)" data-open="${b64([first])}">${ICON.finder}访问</button>`:`<span class="note">展开</span>`}</div><div class="dup-paths">${pathsHtml}</div></div>`}).join('');const total=items.reduce((a,it)=>a+parseGB(it.wasted),0);return pageShell('duplicates','重复文件',total>0?`可省 ${fmtGB(total)}`:'副本路径',`<div class="panel"><div class="panel-title"><h3>重复文件组</h3><span>${items.length}</span></div><div class="dup-list">${rows||'<div class="empty">暂无数据</div>'}</div></div>`)}
+	function renderApplications(items){items=arr(items);const max=Math.max(...items.map(it=>parseGB(it.size)),0)||1;const rows=items.map(it=>{const gb=parseGB(it.size);const initial=(it.name||'A').replace(/^\W+/,'').charAt(0).toUpperCase()||'A';return `<div class="app-row"><div class="app-icon">${esc(initial)}</div><div class="item-main"><div class="item-name">${esc(it.name)}</div><div class="item-path">${esc(it.path)}</div></div><div class="bar-track"><i style="width:${pct(gb,max).toFixed(1)}%"></i></div><div class="item-size">${esc(cleanSize(it.size))}</div>${DELETE?`<button class="btn ghost" onclick="openPath(this)" data-open="${b64([it.path])}">${ICON.finder}访问</button>`:`<span class="note">只读</span>`}</div>`}).join('');return pageShell('applications','应用程序','应用排行',`<div class="panel"><div class="panel-title"><h3>应用体积</h3><span>${items.length}</span></div><div class="app-list">${rows||'<div class="empty">暂无数据</div>'}</div></div>`)}
+function renderSummary(sm){if(!sm)return '';const cols=[];if(arr(sm.priority).length)cols.push(['清理优先级',sm.priority]);if(arr(sm.long_term).length)cols.push(['长期建议',sm.long_term]);if(!cols.length)return '';return `<div class="panel"><div class="panel-title"><h3>建议</h3><span>下一步</span></div><div class="summary">${cols.map(c=>`<div class="summary-block"><h3>${esc(c[0])}</h3><ul>${arr(c[1]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></div>`}
+	function renderDenied(){if(!arr(DATA.denied).length)return '';return `<div class="denied"><b>权限不足</b>${arr(DATA.denied).map(p=>`<code>${esc(p)}</code>`).join('')}</div>`}
+	function trashBlock(it){if(!DELETE||!arr(it.trash_paths).length)return '';return `<button class="btn ghost" onclick="openPath(this)" data-open="${b64(it.trash_paths)}">${ICON.finder}访问</button><button class="btn primary" onclick="doTrash(this)" data-paths="${b64(it.trash_paths)}">${ICON.trash}移废纸篓</button><span class="status"></span>`}
+	function yellowBlock(it){if(!DELETE)return '';const hasTrash=arr(it.trash_paths).length;return `<button class="btn ghost" onclick="openPath(this)" data-open="${b64([it.path])}">${ICON.finder}访问</button>${hasTrash?`<button class="btn" onclick="doTrash(this)" data-paths="${b64(it.trash_paths)}">${ICON.trash}移废纸篓</button>`:''}<span class="status"></span>`}
+	function redBlock(it){if(!DELETE||!arr(it.app_paths).length)return '';return `<button class="btn ghost" onclick="openPath(this)" data-open="${b64(it.app_paths)}">${ICON.finder}访问</button><span class="status"></span>`}
+function closestAction(btn){return btn.closest('.decision-row')||btn.closest('.dup-group')||btn.closest('.file-row')||btn.closest('.app-row')||btn.closest('.btn-row')||document.body}
+function triggerSafeClean(){if(!DELETE){switchPage('analysis');switchDecision('green');return}switchPage('analysis');switchDecision('green');const status=document.getElementById('overviewStatus');const wraps=[...document.querySelectorAll('#page-analysis .decision-row.green')].filter(w=>!w.classList.contains('cleaned')&&w.querySelector('[data-paths]'));if(!wraps.length){if(status){status.textContent='没有可清理的项了';status.className='status'}return}const all=[];let gb=0;wraps.forEach(w=>{unb64(w.querySelector('[data-paths]').dataset.paths).forEach(p=>all.push(p));const sz=w.querySelector('.decision-size');if(sz)gb+=parseGB(sz.textContent)});if(!confirm(`确认将 ${wraps.length} 项可再生缓存全部移到废纸篓？\n共 ${all.length} 个路径${gb>0?'，约 '+gb.toFixed(1)+' GB':''}。`))return;postAction({querySelector:()=>document.getElementById('overviewStatus'),querySelectorAll:()=>[]},all,'trash').then(res=>{if(res.ok){if(status){status.textContent=`✓ 已移 ${wraps.length} 项`;status.className='status ok'}wraps.forEach(markCleaned);mergeLog(res.log)}else if(status){status.textContent='✗ '+(res.error||'失败');status.className='status err'}})}
+function postAction(wrap,paths,mode){const status=wrap.querySelector?wrap.querySelector('.status'):null;const btns=wrap.querySelectorAll?wrap.querySelectorAll('.btn'):[];if(status){status.textContent='处理中...';status.className='status busy'}btns.forEach(b=>b.disabled=true);return fetch(DELETE.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:DELETE.token,paths,mode})}).then(r=>r.json()).then(res=>{btns.forEach(b=>b.disabled=false);return res}).catch(e=>{btns.forEach(b=>b.disabled=false);return{ok:false,error:'连接失败：'+e}})}
+function markCleaned(wrap){const item=wrap.closest?wrap.closest('.decision-row'):null;if(item)item.classList.add('cleaned');const st=wrap.querySelector?wrap.querySelector('.status'):null;if(st){st.textContent='✓ 已移到废纸篓';st.className='status ok'}if(wrap.querySelectorAll)wrap.querySelectorAll('.btn.primary,.btn:not(.ghost)').forEach(b=>{if(b.textContent.includes('废纸篓'))b.remove()})}
+function doTrash(btn){const wrap=closestAction(btn);const paths=unb64(btn.dataset.paths);if(!confirm(`确认移到废纸篓（可恢复）以下 ${paths.length} 个路径？\n\n`+paths.join('\n')))return;postAction(wrap,paths,'trash').then(res=>{const st=wrap.querySelector('.status');if(res.ok){markCleaned(wrap);mergeLog(res.log)}else if(st){st.textContent='✗ '+(res.error||'失败');st.className='status err'}})}
+function openPath(btn){const wrap=closestAction(btn);const paths=unb64(btn.dataset.open);postAction(wrap,paths,'open').then(res=>{const st=wrap.querySelector('.status');if(st){if(res.ok){st.textContent='✓ 已在'+FM+'打开';st.className='status ok'}else{st.textContent='✗ '+(res.error||'失败');st.className='status err'}}else if(!res.ok){alert(res.error||'打开失败')}})}
+function mergeLog(log){if(!log||!log.actions)return;log.actions.forEach(a=>{if(a.mode==='trash'&&a.path)CLEANED_PATHS.add(a.path)});document.querySelectorAll('[data-paths]').forEach(b=>{const row=b.closest('.decision-row');if(!row)return;const paths=unb64(b.dataset.paths);if(paths.length&&paths.every(p=>CLEANED_PATHS.has(p)))markCleaned(row)})}
+function switchPage(id){ACTIVE_PAGE=id;document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===id));document.querySelectorAll('.nav-link').forEach(b=>b.classList.toggle('active',b.dataset.page===id));updateTopActions(id);history.replaceState(null,'','#'+id)}
+function switchDecision(id){ACTIVE_DECISION=id;document.querySelectorAll('.decision-tab').forEach(b=>b.classList.toggle('active',b.dataset.decision===id));document.querySelectorAll('.decision-page').forEach(p=>p.classList.toggle('active',p.dataset.decisionPage===id))}
+function initNav(){document.querySelectorAll('.nav-link').forEach(b=>b.addEventListener('click',()=>switchPage(b.dataset.page)));const hash=(location.hash||'').replace('#','');if(['overview','analysis','big-files','duplicates','applications'].includes(hash))switchPage(hash);else switchPage('overview')}
+document.getElementById('app').innerHTML=renderOverview(DATA.system||{},DATA.summary||{})+renderAnalysis()+renderBigFiles(DATA.big_files)+renderDuplicates(DATA.duplicates)+renderApplications(DATA.applications);
+initNav();switchDecision('green');
+if(DELETE&&DELETE.logEndpoint){fetch(DELETE.logEndpoint).then(r=>r.json()).then(mergeLog).catch(()=>{})}
 </script>
 </body>
 </html>

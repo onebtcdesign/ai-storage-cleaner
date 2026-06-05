@@ -24,6 +24,7 @@ Schema (all sections optional except system):
               why_keep, indirect_release, auto_reclaim, app_paths:[...]?}],
   "big_files": [{name, path, size, kind, ext}],          # largest single files (open-only)
   "duplicates": [{name, size, count, wasted, kind, paths:[...]}],  # duplicate sets (open-only)
+  "applications": [{name, path, size, kind}],            # app size ranking (open-only)
   "denied": ["/path/one", ...],
   "summary": {overview, tier_stats:{green,yellow,red}, priority:[...], long_term:[...]}
 }

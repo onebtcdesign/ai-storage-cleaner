@@ -6,7 +6,8 @@ interactive report, and exposes POST /action to move allowlisted paths to Trash.
 Stop with Ctrl+C.
 
 Usage:
-    server.py <analysis.json>
+    server.py <analysis.json|storage-report.html>
+    server.py --no-open <analysis.json|storage-report.html>
 
 SAFETY MODEL — read before changing:
 - Allowlist: only paths listed in this report's green/yellow items
@@ -48,14 +49,31 @@ def expand(p):
     return os.path.realpath(os.path.expanduser(p))
 
 
-def load(src):
+def read_report_data(src):
     with open(src, encoding="utf-8") as f:
-        data = json.load(f)
+        text = f.read()
+
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        return json.loads(stripped)
+
+    marker = "const DATA ="
+    idx = text.find(marker)
+    if idx < 0:
+        raise ValueError("找不到分析数据：请传入 analysis.json，或包含 `const DATA = ...;` 的报告 HTML")
+    payload = text[idx + len(marker):].lstrip()
+    data, _ = json.JSONDecoder().raw_decode(payload)
+    return data
+
+
+def load(src):
+    data = read_report_data(src)
     with open(TEMPLATE, encoding="utf-8") as f:
         tpl = f.read()
     # 两套白名单：
     #   trash = 绿灯 + 橙灯 trash_paths（全部只准移废纸篓/回收站）
-    #   open  = trash 全集 + 橙灯 path + 红灯 app_paths（仅"在文件管理器打开"，非破坏性）
+    #   open  = trash 全集 + 橙灯 path + 红灯 app_paths + 应用排行路径
+    #           （仅"在文件管理器打开"，非破坏性）
     trash_allow, open_allow = set(), set()
     for it in data.get("green", []):
         for p in (it.get("trash_paths") or []):
@@ -84,6 +102,12 @@ def load(src):
     for g in data.get("duplicates", []):
         for p in (g.get("paths") or []):
             rp = expand(p)
+            if os.path.exists(rp):
+                open_allow.add(rp)
+    # 应用程序模块：只允许定位打开，不允许从网页移废纸篓/回收站。
+    for it in data.get("applications", []):
+        if it.get("path"):
+            rp = expand(it["path"])
             if os.path.exists(rp):
                 open_allow.add(rp)
     return data, tpl, trash_allow, open_allow
@@ -271,12 +295,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    if len(sys.argv) < 2:
+    no_open = "--no-open" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--no-open"]
+    if not args:
         print(__doc__)
         sys.exit(1)
     global DATA, TPL, TRASH_ALLOW, OPEN_ALLOW, LOG_PATH
-    DATA, TPL, TRASH_ALLOW, OPEN_ALLOW = load(sys.argv[1])
-    LOG_PATH = init_log(sys.argv[1])
+    src = args[0]
+    DATA, TPL, TRASH_ALLOW, OPEN_ALLOW = load(src)
+    LOG_PATH = init_log(src)
     srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     port = srv.server_address[1]
     url = "http://127.0.0.1:%d/" % port
@@ -284,7 +311,8 @@ def main():
     print("安全清理模式：所有清理动作只会移到废纸篓/回收站，不直接删除")
     print("可移废纸篓/回收站 %d 项 | 清理日志：%s" % (len(TRASH_ALLOW), LOG_PATH))
     print("用完按 Ctrl+C 停止服务（服务关掉后按钮即失效）")
-    threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+    if not no_open:
+        threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

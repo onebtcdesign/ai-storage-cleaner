@@ -321,6 +321,34 @@ def build_duplicates(scan, limit=20):
     return out[:limit]
 
 
+def build_applications(scan, limit=40):
+    """Build an application size ranking for the report UI.
+
+    These entries are open-only in server.py. They are intentionally separate
+    from green/yellow trash paths because app removal should go through Finder,
+    Launchpad, Windows Settings, or the app's own uninstaller.
+    """
+    out = []
+    for item in (scan.get("groups") or {}).get("applications") or []:
+        path = item.get("path")
+        if not path or item.get("denied"):
+            continue
+        gb = gb_from_item(item)
+        if gb <= 0:
+            continue
+        out.append({
+            "name": item.get("name") or clean_name(path),
+            "path": path,
+            "size": size_label(gb),
+            "kind": "应用程序",
+            "_gb": gb,
+        })
+    out.sort(key=lambda x: x["_gb"], reverse=True)
+    for item in out:
+        item.pop("_gb", None)
+    return out[:limit]
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -335,6 +363,7 @@ def main():
     red = build_red(scan)
     big_files = build_big_files(scan)
     duplicates = build_duplicates(scan)
+    applications = build_applications(scan)
     g = sum(parse_gb(x.get("size_estimate")) for x in green)
     y = sum(parse_gb(x.get("size")) for x in yellow_items)
     r = sum(parse_gb(x.get("size")) for x in red)
@@ -354,6 +383,7 @@ def main():
         "red": red,
         "big_files": big_files,
         "duplicates": duplicates,
+        "applications": applications,
         "denied": denied(scan),
         "summary": {
             "overview": "优先处理绿灯缓存，预计可释放 %s。" % size_label(g),

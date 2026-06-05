@@ -18,6 +18,8 @@ description: >
 
 对 macOS / Windows 做一次只读存储分析，产出以电脑名称命名的交互式 HTML 报告。流程：扫描本机与外接盘 → 自动分析分级 → 生成网页 → 安全清理。
 
+当前版本：`v1.1.0`
+
 ## 铁律
 
 - **扫描全程只读。** 扫描/分析阶段只能跑统计、列目录、读元信息（df、du、diskutil、stat、ls）。绝对禁止 rm、mv、rmdir、清空回收站、改权限等任何写操作。
@@ -38,7 +40,7 @@ python3 scripts/scan.py > /tmp/storage_scan.json
 - **Windows**：扫 user_profile、appdata_local、appdata_roaming、temp、downloads、program_files(_x86)、dev_caches，并枚举所有盘符；非系统盘会生成 `external_volumes` 摘要和 `volume_<盘符>` 子目录体量列表，用 `os.scandir` 算大小。
 - **大文件 + 重复文件（两个系统都有）**：在 home 和各外接盘根上枚举 ≥50MB 的单个大文件（macOS 用 `find -x`，Windows 用 `os.walk`），输出 `big_files`（最大单文件 Top 榜，藏在普通目录里的视频/镜像/虚拟机盘等）。再对大文件按「相同大小 → 头尾分块 sha1」找重复，输出 `duplicates`（重复副本组 + 可省空间）。这两类只读、只定位，不参与自动删除。
 
-输出 JSON：`system`（系统/磁盘信息，含 `computer_name`、`disk_name` 主盘名 + `disks` 全部盘/外接盘）+ `groups`（各组子目录大小，已降序、过滤 50MB 以下）+ `big_files`（最大单文件）+ `duplicates`（重复文件组）。扫描较慢（大文件枚举会遍历全盘），耐心等。读不到的目录标 `denied`，需在报告里列出并提示遗漏体量。
+输出 JSON：`system`（系统/磁盘信息，含 `computer_name`、`disk_name` 主盘名 + `disks` 全部盘/外接盘）+ `groups`（各组子目录大小，已降序、过滤 50MB 以下）+ `big_files`（最大单文件）+ `duplicates`（重复文件组）+ `applications`（应用体积排行）。扫描较慢（大文件枚举会遍历全盘），耐心等。读不到的目录标 `denied`，需在报告里列出并提示遗漏体量。
 
 ### Step 2 分析与分级
 
@@ -53,7 +55,8 @@ python3 scripts/analyze.py /tmp/storage_scan.json /tmp/storage_analysis.json
 - 汇总本机系统盘和外接盘的大目录，识别缓存、安装包、开发缓存、外接盘大目录和大应用。
 - 给可移废纸篓/回收站的项写入 `trash_paths`，供网页按钮白名单使用。
 - 透传 `big_files`（最大单文件，按扩展名标内容类型：视频/镜像/虚拟机镜像/压缩包等）和 `duplicates`（重复文件组 + 每组可省空间）。
-- 生成 `top5`、`summary.tier_stats` 和清理卡片。
+- 生成 `applications`（应用体积排行，open-only，只用于定位和正规卸载，不参与自动删除）。
+- 生成 `top5`、`summary.tier_stats` 和清理决策列表。
 
 之后看 `system.os` 判断系统，读对应的数据布局参考：macOS 读 [references/macos.md](references/macos.md)，Windows 读 [references/windows.md](references/windows.md)（讲该系统东西存哪、怎么辨认、归哪一级）。然后读 `/tmp/storage_scan.json` + `/tmp/storage_analysis.json` 做复核：
 
@@ -78,7 +81,7 @@ python3 scripts/analyze.py /tmp/storage_scan.json /tmp/storage_analysis.json
 ```bash
 python3 scripts/server.py /tmp/storage_analysis.json   # 自动开浏览器，Ctrl+C 停
 ```
-`server.py` 起在 127.0.0.1 + 随机端口 + 随机 token。🟢 项给「移到废纸篓/回收站」；🟡 项给「在访达打开」+（有安全子路径时）「移到废纸篓/回收站」；🔴 项只给打开位置或正规卸载建议；**大文件榜和重复文件组只给「在访达打开」**（只读定位，不参与自动删除）。**安全模型**：`trash` 只允许 green/yellow 的 `trash_paths`，这些白名单路径可以来自主目录，也可以来自外接盘；`open` 允许上述全部 + 橙灯真实 `path` + 红灯 `app_paths` + `big_files` 路径 + `duplicates` 所有路径。所有请求 realpath 校验 + 精确白名单校验 + token + Host 校验，每次点击浏览器先 confirm。osascript/SHFileOperationW 入废纸篓，macOS 首次弹访达自动化授权点允许即可。
+`server.py` 起在 127.0.0.1 + 随机端口 + 随机 token。🟢 项给「移到废纸篓/回收站」；🟡 项给「在访达打开」+（有安全子路径时）「移到废纸篓/回收站」；🔴 项只给打开位置或正规卸载建议；**大文件榜、重复文件组和应用程序排行只给「在访达/资源管理器打开」或定位卸载**（只读定位，不参与自动删除）。**安全模型**：`trash` 只允许 green/yellow 的 `trash_paths`，这些白名单路径可以来自主目录，也可以来自外接盘；`open` 允许上述全部 + 橙灯真实 `path` + 红灯 `app_paths` + `big_files` 路径 + `duplicates` 所有路径 + `applications` 应用路径。所有请求 realpath 校验 + 精确白名单校验 + token + Host 校验，每次点击浏览器先 confirm。osascript/SHFileOperationW 入废纸篓，macOS 首次弹访达自动化授权点允许即可。
 
 仅当用户明确只想要一份可分享/留存的只读文件时，才用静态模式（无删除按钮，因为 `file://` 打开的页面碰不到文件系统）：
 ```bash
@@ -87,7 +90,14 @@ python3 scripts/build_report.py /tmp/storage_analysis.json ~/Desktop/storage-rep
 
 **排障：网页上没有移废纸篓按钮** = 要么开的是静态报告（改用 `server.py`），要么 🟢 项漏了 `trash_paths`（补上重启服务）。
 
-报告阅读流（固定顺序）：磁盘总览卡片（容量 + 分段进度条 + 三色图例 + 系统信息）→ 占用排行 Top5 → 🟢🟡🔴 三组视觉卡片 → 最大单文件 Top 榜 → 重复文件组 → 总结与建议。即「现状 → 最大占用 → 可操作项 → 大文件/重复 → 建议」。UI 是浅色极简线条风（白底 + 发丝级 1px 细线 + 大留白 + 黑灰主色 + 单一靛蓝强调色 + 等宽数字），符合阅读习惯、信息密度高、文案短直接。
+报告 UI 是左侧导航 + 右侧文件管理 App 式仪表盘，导航固定五个模块：**概览 / 存储分析 / 大文件 / 重复文件 / 应用程序**。桌面端用 100vw/100vh 全屏布局，不包成居中卡片；移动端变成顶部横向导航；点击导航在单页 HTML 内做模块切换，不做整页滚动。五个模块职责：
+- **概览**：突出可释放空间、已用、可用、磁盘数量和主 CTA；次要信息只保留存储分布、重点占用和磁盘列表，文案保持短句。服务模式下「安全清理」触发绿灯批量移废纸篓；静态模式下切换到存储分析模块。
+- **存储分析**：上方是表格式占用排行 Top5，下方是 🟢可清理 / 🟡需确认 / 🔴谨慎处理 三段 tab；每个 tab 内清理项使用紧凑列表行，避免卡片重复和信息拥挤。
+- **大文件**：最大单文件列表，只读定位，服务模式下只允许打开位置。
+- **重复文件**：重复文件组、可省空间和副本路径，只读定位；服务模式下组标题和展开后的每条副本路径都有「打开」按钮，用户自行确认保留哪一份。
+- **应用程序**：应用体积排行，只允许定位应用/打开位置，提醒用户走 Finder、启动台、Windows 设置或应用自带卸载器；不在网页内卸载，也不加入 `trash_paths`。
+
+视觉风格参考桌面文件管理 SaaS：白色全屏工作台、固定左侧栏、顶部搜索和操作区、克制高亮态、紧凑表格/列表布局；文案尽量短，只保留数字、状态和动作。不引入外部图片、CDN 或第三方依赖，HTML/CSS/JS 全部内嵌。
 
 注意 `summary.overview` 要写成一句话洞察（直接说最大占用是什么、能释放多少），不要重复总/已用/可用数字——那些已在卡片大数字里显示。
 
