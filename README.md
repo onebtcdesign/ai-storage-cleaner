@@ -84,6 +84,18 @@ python3 scripts/server.py /tmp/storage_analysis.json
 - 使用左侧导航的全屏报告 UI：概览、存储分析、大文件、重复文件、应用程序五个模块。
 - 所有自动清理都走白名单和浏览器确认，只移到废纸篓/回收站。
 
+## 报告截图
+
+以下截图使用脱敏 demo 数据渲染，不包含真实用户路径或扫描结果。
+
+### 概览
+
+![存储报告概览](docs/images/report-overview.jpg)
+
+### 存储分析
+
+![存储报告存储分析](docs/images/report-storage-analysis.jpg)
+
 ## 手动生成静态报告
 
 如果只想留存一份不能清理的静态 HTML 文件：
